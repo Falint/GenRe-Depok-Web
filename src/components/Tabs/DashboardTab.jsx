@@ -34,7 +34,7 @@ export default function DashboardTab({
   // RBAC Access Control
   const isFinanceAdmin = canViewAdminFinance(currentRole.id); // Ketua, Wakil, Sekretaris, Bendahara
   const isLeadership = canApproveOrConfirm(currentRole.id); // Inti + Kabid
-  const isBendahara = currentRole.id.includes('bendahara');
+  const isBendahara = currentRole.isBendahara;
 
   // Compute pending metrics
   const pendingSurat = suratList.filter(s => s.status.includes('Menunggu'));

@@ -41,7 +41,7 @@ export const ROLES = [
 
 // Helper Permission RBAC
 export const isPengurusInti = (roleId) => {
-  return ['ketua', 'wakil', 'sekretaris', 'bendahara_1', 'bendahara_2'].includes(roleId);
+  return ['inti', 'ketua', 'wakil', 'sekretaris', 'bendahara_1', 'bendahara_2'].includes(roleId);
 };
 
 export const canViewAdminFinance = (roleId) => {
@@ -49,7 +49,7 @@ export const canViewAdminFinance = (roleId) => {
 };
 
 export const canApproveOrConfirm = (roleId) => {
-  return ['ketua', 'wakil', 'sekretaris', 'bendahara_1', 'bendahara_2', 'kabid_internal', 'kabid_eksternal', 'kabid_branding'].includes(roleId);
+  return ['inti', 'kabid', 'ketua', 'wakil', 'sekretaris', 'bendahara_1', 'bendahara_2', 'kabid_internal', 'kabid_eksternal', 'kabid_branding'].includes(roleId);
 };
 
 export const canViewAttendanceList = (roleId) => {

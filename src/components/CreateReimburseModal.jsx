@@ -13,7 +13,7 @@ export default function CreateReimburseModal({ isOpen, onClose, onSubmit, curren
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.proker || !formData.nominal || !formData.rekening) {
       alert('Mohon lengkapi semua field bertanda bintang!');
@@ -43,8 +43,7 @@ export default function CreateReimburseModal({ isOpen, onClose, onSubmit, curren
       ]
     };
 
-    onSubmit(newReimburse);
-    onClose();
+    if (await onSubmit(newReimburse)) onClose();
   };
 
   return (

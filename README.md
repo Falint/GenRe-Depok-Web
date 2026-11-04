@@ -34,8 +34,13 @@ Sistem Administrasi, Komunikasi, dan Basis Data Terpadu untuk Forum GenRe Kota D
 # Instal dependensi (sudah terinstal)
 npm install
 
+# Konfigurasi Supabase Auth (gunakan URL proyek dan anon key, bukan service-role key)
+cp .env.example .env
+
 # Jalankan server pengembangan
 npm run dev
 ```
 
 Akses portal melalui browser di `http://localhost:3000`.
+
+Login memerlukan `VITE_SUPABASE_URL` dan `VITE_SUPABASE_ANON_KEY` pada `.env`. Akun dan profil dibuat sesuai `supabase_setup.sql`; pendaftaran mandiri dan reset kata sandi belum disediakan oleh proyek ini.

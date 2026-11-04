@@ -12,7 +12,7 @@ export default function CreateSuratModal({ isOpen, onClose, onSubmit, currentRol
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.perihal || !formData.tujuan) {
       alert('Mohon lengkapi perihal dan tujuan surat!');
@@ -44,8 +44,7 @@ export default function CreateSuratModal({ isOpen, onClose, onSubmit, currentRol
       ]
     };
 
-    onSubmit(newSurat);
-    onClose();
+    if (await onSubmit(newSurat)) onClose();
   };
 
   return (

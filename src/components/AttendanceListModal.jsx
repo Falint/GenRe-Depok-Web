@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { X, CheckCircle2, Clock, Users, Search } from 'lucide-react';
-import { ROLES } from '../data/mockData';
 
 export default function AttendanceListModal({ isOpen, onClose, pengumuman, currentRole }) {
   const [search, setSearch] = useState('');
@@ -9,10 +8,10 @@ export default function AttendanceListModal({ isOpen, onClose, pengumuman, curre
   if (!isOpen || !pengumuman) return null;
 
   // Group all roster
-  const allMembers = ROLES.map(role => {
-    const readInfo = (pengumuman.readList || []).find(r => r.roleId === role.id);
+  const allMembers = (pengumuman.roster || []).map((member) => {
+    const readInfo = (pengumuman.readList || []).find((row) => row.userId === member.id);
     return {
-      ...role,
+      ...member,
       hasRead: Boolean(readInfo),
       confirmedAt: readInfo ? readInfo.confirmedAt : '-'
     };

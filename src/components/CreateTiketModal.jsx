@@ -12,7 +12,7 @@ export default function CreateTiketModal({ isOpen, onClose, onSubmit, currentRol
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.judul || !formData.deskripsi) {
       alert('Mohon isi judul dan rincian informasi yang diminta!');
@@ -33,8 +33,7 @@ export default function CreateTiketModal({ isOpen, onClose, onSubmit, currentRol
       respons: 'Tiket baru diajukan. Menunggu respons dari pihak yang dituju.'
     };
 
-    onSubmit(newTiket);
-    onClose();
+    if (await onSubmit(newTiket)) onClose();
   };
 
   return (

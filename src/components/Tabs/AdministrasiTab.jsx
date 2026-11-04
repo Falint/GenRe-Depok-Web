@@ -33,7 +33,7 @@ export default function AdministrasiTab({
 
   const isFinanceAdmin = canViewAdminFinance(currentRole.id); // Ketua, Wakil, Sekretaris, Bendahara 1 & 2
   const isLeadership = canApproveOrConfirm(currentRole.id); // Inti + Kabid
-  const isBendahara = currentRole.id.includes('bendahara');
+  const isBendahara = currentRole.isBendahara;
 
   // If role is regular staff, block global administrative & financial view
   if (!isFinanceAdmin && !isLeadership) {
@@ -98,7 +98,7 @@ export default function AdministrasiTab({
     return matchSearch;
   });
 
-  const canApproveFinance = currentRole.id.includes('bendahara') || currentRole.id === 'ketua' || currentRole.id === 'wakil';
+  const canApproveFinance = currentRole.level === 'inti';
 
   return (
     <div className="space-y-6 pb-20 md:pb-6">

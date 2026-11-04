@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import Header from './components/Header';
 import BottomNav from './components/BottomNav';
 import SuratPreviewModal from './components/SuratPreviewModal';
@@ -8,6 +8,9 @@ import CreateTiketModal from './components/CreateTiketModal';
 import NotificationModal from './components/NotificationModal';
 import AttendanceListModal from './components/AttendanceListModal';
 import MutasiKasModal from './components/MutasiKasModal';
+import LoginPage from './components/LoginPage';
+import { restoreSession, signOut } from './lib/supabaseAuth';
+import { clearPortalSession, createPortalRow, loadPortalData, setPortalSession, subscribePortalData, updatePortalRow } from './lib/portalData';
 
 import DashboardTab from './components/Tabs/DashboardTab';
 import AdministrasiTab from './components/Tabs/AdministrasiTab';
@@ -16,16 +19,7 @@ import MediaLibraryTab from './components/Tabs/MediaLibraryTab';
 import StrukturJobdescTab from './components/Tabs/StrukturJobdescTab';
 import ProfilForumTab from './components/Tabs/ProfilForumTab';
 
-import { 
-  ROLES, 
-  INITIAL_SURAT, 
-  INITIAL_REIMBURSE, 
-  INITIAL_KEUANGAN, 
-  INITIAL_PENGUMUMAN, 
-  INITIAL_TIKET_INFO,
-  canViewAdminFinance,
-  canApproveOrConfirm
-} from './data/mockData';
+import { canViewAdminFinance, canApproveOrConfirm } from './data/mockData';
 
 import { 
   LayoutDashboard, 
@@ -40,17 +34,31 @@ import {
   BookOpen
 } from 'lucide-react';
 
-export default function App() {
-  // Current Active Role (Default: Muhammad Ighasta Mughis - Ketua Umum)
-  const [currentRole, setCurrentRole] = useState(ROLES[0]);
+function profileToRole(profile) {
+  return {
+    id: profile.level,
+    userId: profile.id,
+    name: profile.nama_lengkap,
+    role: profile.jabatan,
+    group: profile.kelompok,
+    level: profile.level,
+    avatar: profile.avatar || '👤',
+    isBendahara: profile.jabatan.toLowerCase().includes('bendahara'),
+  };
+}
+
+function PortalApp({ auth, onSignOut }) {
+  // The authenticated profile, rather than the former role-switch simulation, defines UI permissions.
+  const [currentRole] = useState(() => profileToRole(auth.profile));
   const [activeTab, setActiveTab] = useState('dashboard');
 
   // Shared Data States
-  const [suratList, setSuratList] = useState(INITIAL_SURAT);
-  const [reimburseList, setReimburseList] = useState(INITIAL_REIMBURSE);
-  const [keuangan, setKeuangan] = useState(INITIAL_KEUANGAN);
-  const [pengumumanList, setPengumumanList] = useState(INITIAL_PENGUMUMAN);
-  const [tiketList, setTiketList] = useState(INITIAL_TIKET_INFO);
+  const [suratList, setSuratList] = useState([]);
+  const [reimburseList, setReimburseList] = useState([]);
+  const [keuangan, setKeuangan] = useState({ saldoUtama: 0, pemasukanBulanIni: 0, pengeluaranBulanIni: 0, paguAnggaran: [], transaksiTerbaru: [] });
+  const [pengumumanList, setPengumumanList] = useState([]);
+  const [tiketList, setTiketList] = useState([]);
+  const [dataError, setDataError] = useState('');
 
   // Modal Controllers
   const [isCreateSuratOpen, setIsCreateSuratOpen] = useState(false);
@@ -73,143 +81,68 @@ export default function App() {
 
   const isFinanceAdmin = canViewAdminFinance(currentRole.id);
 
+  const refreshData = useCallback(async () => {
+    try {
+      const data = await loadPortalData(auth.profile);
+      setSuratList(data.suratList); setReimburseList(data.reimburseList); setKeuangan(data.keuangan);
+      setPengumumanList(data.pengumumanList); setTiketList(data.tiketList); setDataError('');
+    } catch (error) { setDataError(error.message || 'Data portal tidak dapat dimuat.'); }
+  }, [auth.profile]);
+
+  useEffect(() => {
+    let unsubscribe;
+    let disposed = false;
+    (async () => {
+      try {
+        await setPortalSession(auth.session);
+        await refreshData();
+        if (!disposed) unsubscribe = await subscribePortalData(refreshData);
+      } catch (error) { if (!disposed) setDataError(error.message || 'Koneksi Supabase gagal.'); }
+    })();
+    return () => { disposed = true; unsubscribe?.(); };
+  }, [auth.session, refreshData]);
+
+  const runMutation = async (action, message) => {
+    try { await action(); await refreshData(); showToast(message); return true; }
+    catch (error) { showToast(error.message || 'Perubahan tidak diizinkan oleh Supabase.'); return false; }
+  };
+
   // Handlers for Surat
-  const handleAddSurat = (newSurat) => {
-    setSuratList([newSurat, ...suratList]);
-    showToast(`Draf Surat "${newSurat.nomor}" berhasil diajukan!`);
-  };
+  const handleAddSurat = (newSurat) => runMutation(() => createPortalRow('surat', {
+    nomor_surat: newSurat.nomor, jenis: newSurat.jenis, perihal: newSurat.perihal, pemohon_id: auth.profile.id,
+    pemohon_nama: currentRole.name, divisi: currentRole.group, tujuan: newSurat.tujuan, keterangan: newSurat.keterangan, urgensi: newSurat.urgensi,
+  }), `Draf surat "${newSurat.nomor}" berhasil diajukan.`);
 
-  const handleApproveSurat = (suratId) => {
-    setSuratList(suratList.map(s => {
-      if (s.id === suratId) {
-        return {
-          ...s,
-          status: 'Selesai / Terbit (QR ACC)',
-          approvalHistory: [
-            ...s.approvalHistory,
-            { step: `ACC & Tanda Tangan: ${currentRole.role}`, actor: currentRole.name, status: 'Disetujui', time: 'Baru saja' }
-          ]
-        };
-      }
-      return s;
-    }));
-
-    if (selectedSuratForPreview && selectedSuratForPreview.id === suratId) {
-      setSelectedSuratForPreview({
-        ...selectedSuratForPreview,
-        status: 'Selesai / Terbit (QR ACC)'
-      });
-    }
-    showToast(`Surat berhasil di-ACC & ditandatangani digital oleh ${currentRole.name}!`);
-  };
+  const handleApproveSurat = (suratId) => runMutation(async () => {
+    await updatePortalRow('surat', suratId, { status: 'Selesai / Terbit (QR ACC)' });
+    await createPortalRow('surat_approval', { surat_id: suratId, step_order: 99, step_label: `ACC & Tanda Tangan: ${currentRole.role}`, actor_name: currentRole.name, status: 'Disetujui', acted_at: new Date().toISOString() });
+    setSelectedSuratForPreview(null);
+  }, `Surat berhasil di-ACC oleh ${currentRole.name}.`);
 
   // Handlers for Reimburse
-  const handleAddReimburse = (newReimburse) => {
-    setReimburseList([newReimburse, ...reimburseList]);
-    showToast(`Klaim reimburse Rp ${newReimburse.nominal.toLocaleString('id-ID')} berhasil diajukan.`);
-  };
+  const handleAddReimburse = (newReimburse) => runMutation(() => createPortalRow('reimburse', {
+    proker: newReimburse.proker, pemohon_id: auth.profile.id, pemohon_nama: currentRole.name, divisi: currentRole.group,
+    nominal: newReimburse.nominal, keterangan: newReimburse.keterangan, bank: newReimburse.bank, rekening: newReimburse.rekening,
+  }), `Klaim reimburse Rp ${newReimburse.nominal.toLocaleString('id-ID')} berhasil diajukan.`);
 
-  const handleApproveReimburse = (reimburseId) => {
-    setReimburseList(reimburseList.map(r => {
-      if (r.id === reimburseId) {
-        return {
-          ...r,
-          status: 'Selesai / Dicairkan',
-          approvalChain: r.approvalChain.map(c => ({ ...c, status: 'Disetujui / Ditransfer' }))
-        };
-      }
-      return r;
-    }));
-
-    const item = reimburseList.find(r => r.id === reimburseId);
-    if (item) {
-      setKeuangan(prev => ({
-        ...prev,
-        saldoUtama: prev.saldoUtama - item.nominal,
-        pengeluaranBulanIni: prev.pengeluaranBulanIni + item.nominal,
-        transaksiTerbaru: [
-          {
-            tgl: '03 Nov 2026',
-            deskripsi: `Pencairan Reimburse: ${item.proker}`,
-            jenis: 'Keluar',
-            nominal: item.nominal,
-            kategori: item.divisi,
-            sumberDana: 'Bank BJB (Kas Daerah)'
-          },
-          ...prev.transaksiTerbaru
-        ]
-      }));
-    }
-
-    showToast(`Klaim telah diverifikasi dan dana dicairkan oleh Bendahara.`);
-  };
+  const handleApproveReimburse = (reimburseId) => runMutation(async () => {
+    const item = reimburseList.find((row) => row.id === reimburseId);
+    await updatePortalRow('reimburse', reimburseId, { status: 'Selesai / Dicairkan' });
+    await createPortalRow('reimburse_approval', { reimburse_id: reimburseId, step_order: 99, role_label: currentRole.role, actor_name: currentRole.name, status: 'Disetujui / Ditransfer', acted_at: new Date().toISOString() });
+    if (item) await createPortalRow('kas_mutasi', { tgl: new Date().toISOString().slice(0, 10), deskripsi: `Pencairan Reimburse: ${item.proker}`, jenis: 'Keluar', nominal: item.nominal, kategori: item.divisi, sumber_dana: 'Kas Utama', dicatat_oleh: auth.profile.id, dicatat_oleh_nama: currentRole.name });
+  }, 'Klaim telah diverifikasi dan dana dicairkan.');
 
   // Handlers for Mutasi Kas (Tambah & Kurang Kas oleh Bendahara)
-  const handleMutasiKas = (mutasi) => {
-    if (mutasi.jenis === 'Masuk') {
-      setKeuangan(prev => ({
-        ...prev,
-        saldoUtama: prev.saldoUtama + mutasi.nominal,
-        pemasukanBulanIni: prev.pemasukanBulanIni + mutasi.nominal,
-        transaksiTerbaru: [
-          {
-            tgl: mutasi.tgl,
-            deskripsi: mutasi.deskripsi,
-            jenis: 'Masuk',
-            nominal: mutasi.nominal,
-            kategori: mutasi.kategori,
-            sumberDana: mutasi.sumberDana
-          },
-          ...prev.transaksiTerbaru
-        ]
-      }));
-      showToast(`Pemasukan kas Rp ${mutasi.nominal.toLocaleString('id-ID')} berhasil ditambahkan!`);
-    } else {
-      setKeuangan(prev => ({
-        ...prev,
-        saldoUtama: prev.saldoUtama - mutasi.nominal,
-        pengeluaranBulanIni: prev.pengeluaranBulanIni + mutasi.nominal,
-        transaksiTerbaru: [
-          {
-            tgl: mutasi.tgl,
-            deskripsi: mutasi.deskripsi,
-            jenis: 'Keluar',
-            nominal: mutasi.nominal,
-            kategori: mutasi.kategori,
-            sumberDana: mutasi.sumberDana
-          },
-          ...prev.transaksiTerbaru
-        ]
-      }));
-      showToast(`Pengeluaran kas Rp ${mutasi.nominal.toLocaleString('id-ID')} berhasil dicatat & saldo dipotong.`);
-    }
-  };
+  const handleMutasiKas = (mutasi) => runMutation(() => createPortalRow('kas_mutasi', { tgl: new Date().toISOString().slice(0, 10), deskripsi: mutasi.deskripsi, jenis: mutasi.jenis, nominal: mutasi.nominal, kategori: mutasi.kategori, sumber_dana: mutasi.sumberDana, dicatat_oleh: auth.profile.id, dicatat_oleh_nama: currentRole.name }), 'Mutasi kas berhasil dicatat.');
 
   // Handlers for Tiket
-  const handleAddTiket = (newTiket) => {
-    setTiketList([newTiket, ...tiketList]);
-    showToast(`Tiket info "${newTiket.judul}" berhasil dikirim.`);
-  };
+  const handleAddTiket = (newTiket) => runMutation(() => createPortalRow('tiket_info', { judul: newTiket.judul, pemohon_id: auth.profile.id, pemohon_nama: currentRole.name, divisi_asal: currentRole.group, target_bidang: newTiket.tujuan, prioritas: newTiket.prioritas, deadline: newTiket.deadline || null, deskripsi: newTiket.deskripsi }), `Tiket info "${newTiket.judul}" berhasil dikirim.`);
 
-  const handleUpdateTiketResponse = (tiketId, responseText) => {
-    setTiketList(tiketList.map(t => {
-      if (t.id === tiketId) {
-        return {
-          ...t,
-          status: 'Selesai',
-          respons: responseText
-        };
-      }
-      return t;
-    }));
-    showToast(`Tanggapan tersimpan & status tiket ditutup.`);
-  };
+  const handleUpdateTiketResponse = (tiketId, responseText) => runMutation(() => updatePortalRow('tiket_info', tiketId, { status: 'Selesai', respons: responseText }), 'Tanggapan tersimpan dan tiket ditutup.');
 
   // Handlers for Pengumuman
-  const handleAddPengumuman = (newAnn) => {
-    setPengumumanList([newAnn, ...pengumumanList]);
-    showToast(`Siaran pengumuman baru berhasil dipublikasikan.`);
-  };
+  const handleAddPengumuman = (newAnn) => runMutation(() => createPortalRow('pengumuman', { judul: newAnn.judul, kategori: newAnn.kategori, target: newAnn.target, isi: newAnn.isi, penulis_id: auth.profile.id, penulis_nama: currentRole.name, total_target: 0 }), 'Siaran pengumuman baru berhasil dipublikasikan.');
+  const handleConfirmRead = (pengumumanId) => runMutation(() => createPortalRow('pengumuman_kehadiran', { pengumuman_id: pengumumanId, user_id: auth.profile.id }), 'Kehadiran Anda telah dikonfirmasi.');
 
   // Calculate pending badges for UI
   const pendingAdministrasiCount = 
@@ -224,10 +157,7 @@ export default function App() {
       {/* Top Application Header with 4 Logos, Role Switcher & Bell */}
       <Header
         currentRole={currentRole}
-        onSelectRole={(role) => {
-          setCurrentRole(role);
-          showToast(`Beralih simulasi ke: ${role.name} (${role.role})`);
-        }}
+        onSignOut={onSignOut}
         unreadCount={isFinanceAdmin ? pendingAdministrasiCount : pendingKomunikasiCount}
         onOpenNotification={() => setIsNotificationOpen(true)}
       />
@@ -291,6 +221,8 @@ export default function App() {
           />
         )}
 
+        {dataError && <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{dataError}</div>}
+
         {activeTab === 'profil' && (
           <ProfilForumTab />
         )}
@@ -321,6 +253,7 @@ export default function App() {
             onOpenCreateTiket={() => setIsCreateTiketOpen(true)}
             onAddPengumuman={handleAddPengumuman}
             onUpdateTiketResponse={handleUpdateTiketResponse}
+            onConfirmRead={handleConfirmRead}
             onViewAttendance={(ann) => setSelectedPengumumanForAttendance(ann)}
           />
         )}
@@ -432,4 +365,39 @@ export default function App() {
 
     </div>
   );
+}
+
+export default function App() {
+  const [auth, setAuth] = useState(null);
+  const [checkingSession, setCheckingSession] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    restoreSession().then((storedAuth) => {
+      if (active) {
+        setAuth(storedAuth);
+        setCheckingSession(false);
+      }
+    });
+    return () => { active = false; };
+  }, []);
+
+  const handleSignOut = async () => {
+    const session = auth?.session;
+    setAuth(null);
+    try {
+      await clearPortalSession();
+      await signOut(session);
+    } catch {
+      // The local session is cleared by signOut even if the remote logout request is unavailable.
+    }
+  };
+
+  if (checkingSession) {
+    return <div className="min-h-screen bg-slate-950" aria-label="Memeriksa sesi" />;
+  }
+
+  return auth
+    ? <PortalApp auth={auth} onSignOut={handleSignOut} />
+    : <LoginPage onAuthenticated={setAuth} />;
 }

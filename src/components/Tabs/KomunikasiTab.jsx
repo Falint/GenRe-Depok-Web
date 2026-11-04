@@ -17,11 +17,11 @@ export default function KomunikasiTab({
   onOpenCreateTiket,
   onAddPengumuman,
   onUpdateTiketResponse,
+  onConfirmRead,
   onViewAttendance
 }) {
   const [subTab, setSubTab] = useState('pengumuman'); // 'pengumuman' | 'tiket'
   const [selectedKategori, setSelectedKategori] = useState('Semua');
-  const [readAnnouncements, setReadAnnouncements] = useState({});
 
   // Ticket reply state
   const [activeReplyId, setActiveReplyId] = useState(null);
@@ -36,17 +36,10 @@ export default function KomunikasiTab({
     isi: ''
   });
 
-  const canBroadcast = ['ketua', 'wakil', 'sekretaris', 'bendahara_1', 'bendahara_2', 'kabid_internal', 'kabid_eksternal', 'kabid_branding'].includes(currentRole.id);
+  const canBroadcast = ['inti', 'kabid'].includes(currentRole.level);
   const hasAttendanceAccess = canViewAttendanceList(currentRole.id);
 
-  const handleToggleRead = (id) => {
-    setReadAnnouncements(prev => ({
-      ...prev,
-      [id]: !prev[id]
-    }));
-  };
-
-  const handleBroadcastSubmit = (e) => {
+  const handleBroadcastSubmit = async (e) => {
     e.preventDefault();
     if (!broadcastData.judul || !broadcastData.isi) return;
 
@@ -64,16 +57,18 @@ export default function KomunikasiTab({
       ]
     };
 
-    onAddPengumuman(newAnn);
-    setShowBroadcastForm(false);
-    setBroadcastData({ judul: '', kategori: 'Umum', target: 'Semua Pengurus', isi: '' });
+    if (await onAddPengumuman(newAnn)) {
+      setShowBroadcastForm(false);
+      setBroadcastData({ judul: '', kategori: 'Umum', target: 'Semua Pengurus', isi: '' });
+    }
   };
 
-  const handleSendReply = (tiketId) => {
+  const handleSendReply = async (tiketId) => {
     if (!replyText.trim()) return;
-    onUpdateTiketResponse(tiketId, replyText);
-    setReplyText('');
-    setActiveReplyId(null);
+    if (await onUpdateTiketResponse(tiketId, replyText)) {
+      setReplyText('');
+      setActiveReplyId(null);
+    }
   };
 
   const filteredPengumuman = pengumumanList.filter(p => {
@@ -218,7 +213,7 @@ export default function KomunikasiTab({
           <div className="space-y-4">
             {filteredPengumuman.map((item) => {
               const readCount = (item.readList || []).length;
-              const hasUserRead = (item.readList || []).some(r => r.roleId === currentRole.id) || readAnnouncements[item.id];
+              const hasUserRead = (item.readList || []).some((row) => row.userId === currentRole.userId);
 
               return (
                 <div 
@@ -271,7 +266,8 @@ export default function KomunikasiTab({
 
                       {/* Confirm attendance / read receipt button */}
                       <button
-                        onClick={() => handleToggleRead(item.id)}
+                        onClick={() => !hasUserRead && onConfirmRead(item.id)}
+                        disabled={hasUserRead}
                         className={`text-xs px-3.5 py-1.5 rounded-xl font-bold flex items-center space-x-1 transition-all ${
                           hasUserRead
                             ? 'bg-emerald-100 text-emerald-800'

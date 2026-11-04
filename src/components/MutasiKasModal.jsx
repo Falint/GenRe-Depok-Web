@@ -12,7 +12,7 @@ export default function MutasiKasModal({ isOpen, onClose, onSubmit, currentRole,
 
   const nominalNum = parseInt(nominal.replace(/[^0-9]/g, ''), 10) || 0;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!nominalNum || nominalNum <= 0) {
       alert('Mohon masukkan nominal mutasi kas yang valid!');
@@ -32,7 +32,7 @@ export default function MutasiKasModal({ isOpen, onClose, onSubmit, currentRole,
 
     const tgl = new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
 
-    onSubmit({
+    const saved = await onSubmit({
       tgl,
       deskripsi,
       jenis,
@@ -42,10 +42,11 @@ export default function MutasiKasModal({ isOpen, onClose, onSubmit, currentRole,
       petugas: currentRole.name
     });
 
-    // Reset & close
-    setNominal('');
-    setDeskripsi('');
-    onClose();
+    if (saved) {
+      setNominal('');
+      setDeskripsi('');
+      onClose();
+    }
   };
 
   return (
