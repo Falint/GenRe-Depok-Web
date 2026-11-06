@@ -8,6 +8,7 @@ import type { Surat } from '@/features/portal/mapping';
 import Dialog from './Dialog';
 import React from 'react';
 import { X, Printer, CheckCircle, QrCode } from 'lucide-react';
+import { KABINET } from '@/features/organisasi/content';
 
 export default function SuratPreviewModal({
   surat,
@@ -161,8 +162,8 @@ export default function SuratPreviewModal({
                 sehari-hari.
               </p>
               <p>
-                Sehubungan dengan pelaksanaan program kerja Forum GenRe Kota Depok masa bakti
-                2026/2028, dengan ini kami sampaikan bahwa:
+                Sehubungan dengan pelaksanaan program kerja Forum GenRe Kota Depok masa bakti{' '}
+                {KABINET.periode}, dengan ini kami sampaikan bahwa:
               </p>
               <div className="bg-slate-50 p-3.5 rounded-xl border-l-4 border-genre-orange my-2 text-slate-700 italic">
                 &quot;{surat.keterangan}&quot;

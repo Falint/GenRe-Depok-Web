@@ -9,21 +9,18 @@
 }
 
 .login-shell {
-  background: #07112f;
-  background-image:
-    radial-gradient(circle at 12% 12%, rgba(0, 168, 150, 0.22), transparent 26rem),
-    radial-gradient(circle at 88% 87%, rgba(108, 92, 231, 0.22), transparent 28rem);
+  background: #172e49;
 }
 
 .login-grid {
   box-shadow: 0 30px 100px rgba(0, 11, 42, 0.42);
 }
 .login-intro {
-  background: linear-gradient(145deg, #102a70 0%, #162b78 48%, #005b82 100%);
+  background: #172e49;
 }
 .login-orbit {
   position: absolute;
-  border: 1px solid rgba(165, 243, 252, 0.24);
+  border: 1px solid rgba(197, 161, 91, 0.3);
   border-radius: 999px;
   pointer-events: none;
 }

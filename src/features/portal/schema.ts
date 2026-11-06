@@ -10,11 +10,17 @@ export const profileSchema = z.object({
   bidang_divisi: z.string(),
   kelompok: z.string(),
   level: roleLevelSchema,
+  bidang_id: z.string().nullable().optional(),
+  divisi_id: z.string().nullable().optional(),
   avatar: z.string().nullable(),
   telepon_wa: z.string().nullable(),
   created_at: z.string().nullable(),
 });
-const id = { id: z.uuid(), created_at: z.string().nullable() };
+const id = {
+  id: z.uuid(),
+  created_at: z.string().nullable(),
+  updated_at: z.string().nullable().optional(),
+};
 const requester = { pemohon_id: z.uuid().nullable(), pemohon_nama: z.string(), divisi: z.string() };
 const amount = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 export const rowSchemas = {
@@ -92,12 +98,19 @@ export const rowSchemas = {
     penulis_id: z.uuid().nullable(),
     penulis_nama: z.string(),
     total_target: z.number().int().nullable(),
+    mulai_at: z.string().nullable().optional(),
+    selesai_at: z.string().nullable().optional(),
+    deadline_konfirmasi: z.string().nullable().optional(),
+    cancelled_at: z.string().nullable().optional(),
+    cancellation_reason: z.string().nullable().optional(),
+    version: z.number().int().optional(),
   }),
   pengumuman_kehadiran: z.object({
     id: z.uuid(),
     pengumuman_id: z.uuid(),
     user_id: z.uuid(),
     confirmed_at: z.string().nullable(),
+    is_late: z.boolean().optional(),
   }),
   tiket_info: z.object({
     ...id,
@@ -108,6 +121,7 @@ export const rowSchemas = {
     target_bidang: z.string(),
     prioritas: z.enum(['Rendah', 'Sedang', 'Tinggi', 'Mendesak']).nullable(),
     deadline: z.string().nullable(),
+    deadline_at: z.string().nullable().optional(),
     deskripsi: z.string(),
     respons: z.string().nullable(),
     status: z.enum(['Open', 'In Progress', 'Selesai']).nullable(),

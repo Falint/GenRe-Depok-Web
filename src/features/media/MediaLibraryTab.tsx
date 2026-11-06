@@ -1,21 +1,35 @@
 'use client';
+import { usePortal } from '@/features/portal/PortalProvider';
+import { useFeatureData } from '@/features/portal/useFeatureData';
+import { loadMedia } from './actions';
+import ResourceCard, { MediaEditor } from './ResourceCard';
+const MEDIA_TABLES = ['media_resources', 'profiles'] as const;
 import Image from 'next/image';
 import React, { useState } from 'react';
 import {
   BookOpen,
   Palette,
-  Video,
   Download,
   Search,
   Copy,
   Check,
   Sparkles,
   Film,
+  FileText,
+  ExternalLink,
 } from 'lucide-react';
-import { MEDIA_LIBRARY } from './content';
+import { MEDIA_LIBRARY, SEKRETARIAT_TEMPLATES } from './content';
+import { KABINET } from '@/features/organisasi/content';
 
 export default function MediaLibraryTab() {
-  const [subTab, setSubTab] = useState('modul'); // 'modul' | 'brand'
+  const { currentRole } = usePortal();
+  const { data, loading, error, refresh } = useFeatureData(loadMedia, MEDIA_TABLES);
+  const [adding, setAdding] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
+  const resources = (data || []).filter((item) =>
+    showArchived ? !!item.archived_at : !item.archived_at,
+  );
+  const [subTab, setSubTab] = useState('modul'); // 'modul' | 'brand' | 'template'
   const [searchModul, setSearchModul] = useState('');
   const [copiedHex, setCopiedHex] = useState<string | null>(null);
 
@@ -30,15 +44,42 @@ export default function MediaLibraryTab() {
     setTimeout(() => setCopiedHex(null), 2000);
   };
 
-  const filteredModul = MEDIA_LIBRARY.modulPengetahuan.filter(
-    (m) =>
-      m.judul.toLowerCase().includes(searchModul.toLowerCase()) ||
-      m.kategori.toLowerCase().includes(searchModul.toLowerCase()) ||
-      m.jenjang.toLowerCase().includes(searchModul.toLowerCase()),
-  );
+  const filteredModul = resources
+    .filter((item) => item.jenis === 'modul')
+    .filter(
+      (m) =>
+        m.judul.toLowerCase().includes(searchModul.toLowerCase()) ||
+        m.kategori.toLowerCase().includes(searchModul.toLowerCase()) ||
+        m.jenjang.toLowerCase().includes(searchModul.toLowerCase()),
+    );
 
   return (
     <div className="space-y-6 pb-20 md:pb-6">
+      <button className="text-sm font-semibold text-genre-blue" onClick={() => void refresh()}>
+        Muat ulang media
+      </button>
+      {loading && <p role="status">Memuat katalog media…</p>}
+      {error && <p role="alert">{error}</p>}
+      {currentRole.manageContent && (
+        <div className="flex flex-wrap gap-4">
+          <button
+            disabled={!data}
+            onClick={() => setAdding(true)}
+            className="rounded-xl bg-genre-blue px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+          >
+            Tambah Media
+          </button>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={showArchived}
+              onChange={(e) => setShowArchived(e.target.checked)}
+            />
+            Tampilkan arsip
+          </label>
+        </div>
+      )}
+      {adding && <MediaEditor onClose={() => setAdding(false)} refresh={refresh} />}
       {/* Header & Sub-tabs */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
         <div>
@@ -46,12 +87,11 @@ export default function MediaLibraryTab() {
             Pusat Sumber Daya & Media Library
           </h1>
           <p className="text-xs sm:text-sm text-slate-500">
-            Penyimpanan terstandar modul Triad KRR, panduan keluarga, serta bank aset logo dan video
-            resmi
+            Modul pengetahuan, identitas kabinet, aset organisasi, dan template sekretariat
           </p>
         </div>
 
-        <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200 self-start sm:self-auto">
+        <div className="flex flex-wrap gap-1 bg-slate-100 p-1 rounded-2xl border border-slate-200 self-start sm:self-auto">
           <button
             onClick={() => setSubTab('modul')}
             className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
@@ -74,8 +114,57 @@ export default function MediaLibraryTab() {
             <Palette className="w-3.5 h-3.5" />
             <span>Bank Aset & Brand Kit</span>
           </button>
+          <button
+            onClick={() => setSubTab('template')}
+            className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              subTab === 'template'
+                ? 'bg-white text-genre-blue shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <FileText className="w-3.5 h-3.5" />
+            <span>Template Sekretariat</span>
+          </button>
         </div>
       </div>
+
+      {subTab === 'template' && (
+        <section aria-labelledby="template-sekretariat" className="space-y-4">
+          <div>
+            <h2 id="template-sekretariat" className="text-lg font-bold text-slate-900">
+              Template Sekretariat
+            </h2>
+            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600">
+              Buka template di Google Docs untuk menyiapkan dokumen kegiatan. Akses mengikuti izin
+              Google pada setiap dokumen. Portal tidak membuat salinan atau mengubah dokumen asli
+              secara otomatis.
+            </p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {SEKRETARIAT_TEMPLATES.map((template) => (
+              <article
+                key={template.nama}
+                className="flex flex-col items-start rounded-2xl border border-slate-200 bg-white p-5"
+              >
+                <FileText aria-hidden="true" className="mb-3 h-5 w-5 text-genre-blue" />
+                <h3 className="font-bold text-slate-900">{template.nama}</h3>
+                <p className="mb-5 mt-2 flex-1 text-sm leading-relaxed text-slate-600">
+                  {template.deskripsi}
+                </p>
+                <a
+                  href={template.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`Buka template ${template.nama} (tab baru)`}
+                  className="inline-flex items-center gap-2 rounded-xl bg-genre-blue px-4 py-2 text-xs font-bold text-white hover:bg-genre-blue-dark"
+                >
+                  Buka template <ExternalLink aria-hidden="true" className="h-3.5 w-3.5" />
+                </a>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ===================== SUBTAB 1: MODUL PENGETAHUAN ===================== */}
       {subTab === 'modul' && (
@@ -99,48 +188,7 @@ export default function MediaLibraryTab() {
               <p className="p-6 text-sm text-slate-500">Tidak ada modul yang cocok.</p>
             )}
             {filteredModul.map((modul) => (
-              <div
-                key={modul.id}
-                className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between group"
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-genre-blue uppercase">
-                      {modul.kategori}
-                    </span>
-                    <span className="text-xs text-slate-400 font-mono">{modul.tahun}</span>
-                  </div>
-
-                  <h3 className="font-extrabold text-base text-slate-900 group-hover:text-genre-blue transition-colors">
-                    {modul.judul}
-                  </h3>
-
-                  <p className="text-xs text-slate-600 mt-2 line-clamp-3 leading-relaxed">
-                    {modul.deskripsi}
-                  </p>
-
-                  <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500 font-medium">
-                    <span>
-                      Sasaran: <strong className="text-slate-800">{modul.jenjang}</strong>
-                    </span>
-                    <span>
-                      {modul.halaman} Hal • {modul.size}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="mt-4 pt-3 flex items-center justify-between">
-                  <span className="text-[10px] font-mono text-slate-400">{modul.format}</span>
-                  <button
-                    disabled
-                    title="Berkas modul belum tersedia"
-                    className="px-3 py-1.5 bg-genre-blue hover:bg-genre-blue-dark text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center space-x-1"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    <span>Berkas belum tersedia</span>
-                  </button>
-                </div>
-              </div>
+              <ResourceCard key={modul.id} item={modul} refresh={refresh} />
             ))}
           </div>
         </div>
@@ -149,54 +197,104 @@ export default function MediaLibraryTab() {
       {/* ===================== SUBTAB 2: BRAND KIT & ASSET BANK ===================== */}
       {subTab === 'brand' && (
         <div className="space-y-8">
-          {/* Color Palette Guide */}
-          <div>
-            <h3 className="font-bold text-slate-900 text-sm sm:text-base mb-3 flex items-center">
-              <Palette className="w-4 h-4 mr-2 text-genre-orange" />
-              Palet Warna Identitas Resmi (Brand Color Palette)
-            </h3>
-            <p className="text-xs text-slate-500 mb-4">
-              Gunakan kode hex ini untuk semua kebutuhan publikasi divisi Desain Grafis, Video
-              Editor, dan Social Media.
+          <section
+            aria-labelledby="brand-primera"
+            className="rounded-2xl border border-primera-gold/40 bg-primera-ivory p-5 sm:p-6 text-primera-navy"
+          >
+            <div className="flex items-center gap-4">
+              <Image
+                src={KABINET.logoUrl}
+                alt="Logo sementara PRIMERA"
+                width={80}
+                height={80}
+                className="shrink-0"
+              />
+              <div>
+                <h2 id="brand-primera" className="text-lg font-bold">
+                  Kabinet {KABINET.nama} · PRIME ERA
+                </h2>
+                <p className="mt-1 text-sm">{KABINET.periode}</p>
+                <p className="mt-2 text-sm leading-relaxed">{KABINET.tagline}</p>
+              </div>
+            </div>
+            <p className="mt-4 text-xs leading-relaxed text-slate-600">
+              Logo ini merupakan rancangan sementara berdasarkan filosofi kabinet, bukan logo resmi.
+              Bintang empat sudut melambangkan bimbingan dan visi, jarum emas melambangkan aksi,
+              lima bilah navy mewakili nilai PRIME, dan busur emas melambangkan kolaborasi.
             </p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <a
+                href={KABINET.logoUrl}
+                download
+                className="inline-flex items-center gap-2 rounded-xl bg-primera-navy px-4 py-2 text-xs font-bold text-white hover:underline"
+              >
+                <Download aria-hidden="true" className="h-4 w-4" /> Unduh logo sementara PRIMERA
+              </a>
+              <a
+                href={KABINET.brandGuidelineUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-xl border border-primera-navy px-4 py-2 text-xs font-bold hover:underline"
+              >
+                Buka brand guideline <ExternalLink aria-hidden="true" className="h-4 w-4" />
+              </a>
+            </div>
+          </section>
+          {/* Color Palette Guide */}
+          {[
+            { nama: 'Palet PRIMERA', colors: KABINET.colorPalette },
+            { nama: 'Palet GenRe', colors: MEDIA_LIBRARY.brandKit.colorPalette },
+          ].map((palette) => (
+            <section key={palette.nama} aria-label={palette.nama}>
+              <h3 className="font-bold text-slate-900 text-sm sm:text-base mb-3 flex items-center">
+                <Palette className="w-4 h-4 mr-2 text-genre-orange" />
+                {palette.nama}
+              </h3>
+              <p className="text-xs text-slate-500 mb-4">
+                Gunakan kode hex ini untuk semua kebutuhan publikasi divisi Desain Grafis, Video
+                Editor, dan Social Media.
+              </p>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              {MEDIA_LIBRARY.brandKit.colorPalette.map((col, idx) => (
-                <div
-                  key={idx}
-                  className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm"
-                >
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                {palette.colors.map((col, idx) => (
                   <div
-                    className="h-20 w-full border-b border-slate-200 flex items-end p-2"
-                    style={{ backgroundColor: col.hex }}
-                  />
-                  <div className="p-3">
-                    <p className="font-bold text-xs text-slate-900">{col.name}</p>
-                    <div className="flex items-center justify-between mt-1.5">
-                      <code className="text-xs font-mono font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
-                        {col.hex}
-                      </code>
-                      <button
-                        onClick={() => handleCopyHex(col.hex)}
-                        className="text-[11px] font-semibold text-genre-blue hover:underline flex items-center"
-                        title="Salin kode warna"
-                      >
-                        {copiedHex === col.hex ? (
-                          <span className="text-emerald-600 flex items-center">
-                            <Check className="w-3 h-3 mr-0.5" /> Tersalin
-                          </span>
-                        ) : (
-                          <span className="flex items-center">
-                            <Copy className="w-3 h-3 mr-0.5" /> Salin
-                          </span>
-                        )}
-                      </button>
+                    key={idx}
+                    className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm"
+                  >
+                    <div
+                      className="h-20 w-full border-b border-slate-200 flex items-end p-2"
+                      style={{ backgroundColor: col.hex }}
+                    />
+                    <div className="p-3">
+                      <p className="font-bold text-xs text-slate-900">{col.name}</p>
+                      <p className="mt-1 text-[11px] leading-relaxed text-slate-600">{col.desc}</p>
+                      <div className="flex items-center justify-between mt-1.5">
+                        <code className="text-xs font-mono font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
+                          {col.hex}
+                        </code>
+                        <button
+                          onClick={() => handleCopyHex(col.hex)}
+                          className="text-[11px] font-semibold text-genre-blue hover:underline flex items-center"
+                          title="Salin kode warna"
+                          aria-label={`Salin ${col.name}`}
+                        >
+                          {copiedHex === col.hex ? (
+                            <span className="text-emerald-600 flex items-center">
+                              <Check className="w-3 h-3 mr-0.5" /> Tersalin
+                            </span>
+                          ) : (
+                            <span className="flex items-center">
+                              <Copy className="w-3 h-3 mr-0.5" /> Salin
+                            </span>
+                          )}
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          </div>
+                ))}
+              </div>
+            </section>
+          ))}
 
           {/* Logo Suite */}
           <div>
@@ -206,39 +304,11 @@ export default function MediaLibraryTab() {
             </h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {MEDIA_LIBRARY.brandKit.logos.map((logo, idx) => (
-                <div
-                  key={idx}
-                  className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex items-center justify-between"
-                >
-                  <div className="flex items-center space-x-3">
-                    <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center font-bold text-genre-blue text-xs border border-slate-200">
-                      <Image
-                        src={logo.url}
-                        alt={logo.nama}
-                        width={48}
-                        height={48}
-                        className="h-10 w-10 object-contain"
-                      />
-                    </div>
-                    <div>
-                      <p className="font-bold text-xs sm:text-sm text-slate-900">{logo.nama}</p>
-                      <p className="text-[11px] text-slate-500">
-                        {logo.format} • {logo.size}
-                      </p>
-                    </div>
-                  </div>
-
-                  <a
-                    href={logo.url}
-                    download
-                    className="p-2 rounded-xl bg-slate-100 hover:bg-genre-blue hover:text-white text-slate-700 transition-colors"
-                    title="Unduh Logo"
-                  >
-                    <Download className="w-4 h-4" />
-                  </a>
-                </div>
-              ))}
+              {resources
+                .filter((item) => item.jenis === 'logo')
+                .map((item) => (
+                  <ResourceCard key={item.id} item={item} refresh={refresh} />
+                ))}
             </div>
           </div>
 
@@ -250,33 +320,11 @@ export default function MediaLibraryTab() {
             </h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {MEDIA_LIBRARY.brandKit.videoAssets.map((vid, idx) => (
-                <div
-                  key={idx}
-                  className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex items-center justify-between"
-                >
-                  <div className="flex items-center space-x-3">
-                    <div className="w-12 h-12 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center font-bold text-xs border border-rose-100">
-                      <Video className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <p className="font-bold text-xs sm:text-sm text-slate-900">{vid.nama}</p>
-                      <p className="text-[11px] text-slate-500">
-                        Durasi: {vid.durasi} • {vid.format} • {vid.size}
-                      </p>
-                    </div>
-                  </div>
-
-                  <button
-                    disabled
-                    aria-label="Berkas video/audio belum tersedia"
-                    className="p-2 rounded-xl bg-slate-100 hover:bg-rose-600 hover:text-white text-slate-700 transition-colors"
-                    title="Akses Aset"
-                  >
-                    <Download className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
+              {resources
+                .filter((item) => item.jenis === 'video')
+                .map((item) => (
+                  <ResourceCard key={item.id} item={item} refresh={refresh} />
+                ))}
             </div>
           </div>
         </div>

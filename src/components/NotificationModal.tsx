@@ -1,4 +1,5 @@
 'use client';
+import { formatDate } from '@/features/portal/mapping';
 import type { CurrentRole } from '@/features/auth/permissions';
 import type { PortalTab } from '@/features/portal/routes';
 import type { ModalProps } from './modal-types';
@@ -168,7 +169,10 @@ export default function NotificationModal({
                     {t.judul}
                   </p>
                   <p className="text-[10px] text-slate-500">
-                    Target: {t.tujuan} • Batas: {t.deadline}
+                    Target: {t.tujuan} • Batas:{' '}
+                    {t.deadline_at
+                      ? `${formatDate(t.deadline_at)} WIB`
+                      : t.deadline || 'Belum ditetapkan'}
                   </p>
                 </div>
                 <span className="text-[10px] font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full">

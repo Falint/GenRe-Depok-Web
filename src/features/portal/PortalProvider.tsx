@@ -61,6 +61,7 @@ type Modal =
 type PortalContextValue = PortalData & {
   currentRole: CurrentRole;
   busy: boolean;
+  runMutation: (work: () => Promise<Result>, message: string) => Promise<boolean>;
   onOpenCreateSurat: (event?: MouseEvent<HTMLElement>) => void;
   onOpenCreateReimburse: (event?: MouseEvent<HTMLElement>) => void;
   onOpenCreateTiket: (event?: MouseEvent<HTMLElement>) => void;
@@ -148,6 +149,7 @@ export default function PortalProvider({
         clearTimeout(timer);
         timer = setTimeout(() => {
           void refreshData();
+          if (table === 'profiles') router.refresh();
         }, PORTAL_CONFIG.REALTIME_DEBOUNCE_MS);
       }),
     );
@@ -212,6 +214,7 @@ export default function PortalProvider({
     ...data,
     currentRole,
     busy,
+    runMutation,
     onNavigateTab,
     onOpenCreateSurat: (event) => openModal({ type: 'surat' }, event),
     onOpenCreateReimburse: (event) => openModal({ type: 'reimburse' }, event),

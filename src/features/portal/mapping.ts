@@ -1,6 +1,7 @@
 import type { Row } from './schema';
 import { REIMBURSE_STATUS, SURAT_STATUS, TICKET_STATUS } from './schema';
 import { PortalError } from '@/lib/errors';
+import { driveFileUrl } from './validation';
 
 export function formatDate(value: string | null, dateOnly = false) {
   if (!value) return '-';
@@ -30,11 +31,12 @@ export function mapSurat(row: Row<'surat'>, approvals: Row<'surat_approval'>[]) 
   };
 }
 export function mapReimburse(row: Row<'reimburse'>, approvals: Row<'reimburse_approval'>[]) {
+  const proof = driveFileUrl.safeParse(row.foto_struk_url);
   return {
     ...row,
     status: row.status || REIMBURSE_STATUS.PENDING,
     pemohon: row.pemohon_nama,
-    buktiStruk: row.foto_struk_url,
+    buktiStruk: proof.success ? proof.data : null,
     approvalChain: approvals
       .filter((item) => item.reimburse_id === row.id)
       .sort((a, b) => a.step_order - b.step_order)
@@ -72,6 +74,7 @@ export function mapPengumuman(
         name: byId.get(item.user_id)?.nama_lengkap || 'Pengurus',
         role: byId.get(item.user_id)?.jabatan || '-',
         confirmedAt: formatDate(item.confirmed_at),
+        isLate: item.is_late || false,
       })),
   };
 }

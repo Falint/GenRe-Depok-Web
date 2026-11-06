@@ -2,6 +2,8 @@
 
 Ruang kerja pengurus untuk administrasi surat, klaim reimburse, buku kas, pengumuman dan konfirmasi kehadiran, tiket informasi, profil organisasi, struktur dan 32 jobdesc, serta katalog sumber daya. Identitas visual GenRe dan konten organisasi dipertahankan.
 
+Identitas Kabinet PRIMERA (PRIME ERA), periode 2026–2028, hadir pada login, header, dasbor, profil, dan brand kit. Bagian identitas memakai palet PRIMERA; tema utama dan logo institusi GenRe tetap dipertahankan. Logo PRIMERA berupa SVG rancangan sementara, tersedia untuk diunduh dengan keterangan statusnya di brand kit. Pusat Sumber Daya juga menyediakan empat tautan template sekretariat dari dokumen evaluasi: Notulensi, MOU, Surat Dispensasi, dan Surat Undangan. Semua pengurus yang login dapat membukanya; akses Google Docs mengikuti izin dokumen, tanpa penyalinan atau pengubahan otomatis oleh portal.
+
 ## Stack dan prasyarat
 
 - Next.js 16.4.5 App Router, React 19, TypeScript strict.
@@ -46,7 +48,8 @@ src/
     auth/                 # Form login, sesi server, izin profil
     administrasi/         # Surat, reimburse, kas, Server Actions terkait
     komunikasi/           # Pengumuman, kehadiran, tiket dan Server Actions terkait
-    media/                # Katalog dan brand kit statis
+    media/                # Katalog Supabase, pengelolaan konten dan brand kit
+    panitia/              # Request lintas bidang, assignment dan audit
     organisasi/           # Profil organisasi, struktur dan konten jobdesc resmi
     portal/               # Context UI, schema, mapping, pembacaan data, shared mutation checks
   lib/
@@ -67,21 +70,26 @@ Browser Supabase hanya menangani sesi cookie dan subscription Realtime. Token ti
 
 `database.types.ts` diturunkan dari SQL repository, bukan hasil introspeksi database live. Cocokkan schema staging sebelum rollout. Tidak ada route atau client untuk WhatsApp, webhook, atau automation karena belum ada integrasi existing yang memerlukannya. Integrasi mendatang ditempatkan pada modul server dengan validasi input dan kredensial server; jangan memasukkan key provider ke `NEXT_PUBLIC_*`.
 
-## Supabase dan prasyarat rollout
+## Supabase dan status database
 
 `supabase_setup.sql` adalah setup baseline proyek, bukan migration runner otomatis. Jangan menjalankannya ulang pada database existing. Aplikasi tidak menerapkan SQL atau menjalankan seed saat install, build, test E2E, maupun startup.
 
-**Hardening database belum diterapkan ke layanan live.** Tinjau [SQL hardening](supabase/migrations/202611060001_portal_hardening.sql) dan [catatan migrasi](docs/MIGRATION.md) sebelum rollout:
+**Berdasarkan konfirmasi pemilik proyek, database live berasal dari seluruh file SQL yang sudah ada sebelum penambahan fitur koordinasi, termasuk hardening dan kedua RPC transaksi yang sudah diterapkan.** Status ini berdasarkan konfirmasi pemilik, bukan hasil pemeriksaan langsung database live oleh agent. [SQL hardening](supabase/migrations/202611060001_portal_hardening.sql) dan [catatan migrasi](docs/MIGRATION.md) tetap menjadi referensi implementasi; catatan historis yang menyebut hardening belum diterapkan tidak lagi menggambarkan status penerapannya saat ini.
+
+Dua SQL baru, `202611070001_coordination.sql` dan `202611070002_media_catalog.sql`, **belum dinyatakan diterapkan ke live**. SQL ini menambah master bidang/divisi, panitia lintas bidang dengan approval Kadiv tujuan, jadwal/pembatalan pengumuman, katalog media beserta audit, dan timestamp. Panduan penerapan, pemeriksaan akun, serta rollback tersedia di [Rollout Koordinasi](docs/COORDINATION_ROLLOUT.md).
+
+Pengumuman dan media baru dikelola inti serta pengurus Bidang Branding. Penugasan panitia berada di tab **Kebutuhan Panitia** dalam Komunikasi dan terpisah dari absensi. Dasbor menyediakan kalender WIB; deadline tiket lama tetap berupa teks sampai tanggal kalender ditetapkan. Tanggal penambahan aset katalog lama tidak ditebak. Palet, PRIMERA, dan empat template tetap tersedia saat layanan katalog mengalami gangguan.
+
+Isu perubahan role sendiri masih menjadi tindak lanjut yang perbaikannya ditunda oleh pemilik proyek. Status penerapan hardening di atas bukan pernyataan bahwa seluruh aspek keamanan sudah selesai ditinjau atau seluruh celah sudah ditutup.
+
+RPC adalah pemanggilan fungsi database dari aplikasi. `approve_portal_surat` menyimpan persetujuan dan riwayat surat dalam satu transaksi. `disburse_portal_reimburse` mencatat kas keluar, riwayat persetujuan, dan status pencairan dalam satu transaksi. Jika salah satu langkah gagal, seluruh transaksi dibatalkan. Penguncian row dan relasi ledger unik mencegah pencairan berulang membuat catatan kas ganda. RPC pencairan hanya mencatat pencairan yang telah diverifikasi; tidak mentransfer uang ke bank.
+
+Untuk perubahan database berikutnya:
 
 1. Buat backup dan bandingkan schema/policy staging dengan SQL repository.
-2. Audit profil yang sudah ada: policy lama mengizinkan perubahan level sendiri dan trigger lama mempercayai metadata signup.
-3. Rekonsiliasi klaim yang sudah dicairkan dan ledger lama. Migration tidak menebak hubungan transaksi historis.
-4. Terapkan SQL pada staging yang terisolasi setelah disetujui. SQL menambahkan `kas_mutasi.reimburse_id` dan index unik, memperketat grants/policy, serta menyediakan dua RPC transaksi.
-5. Uji tiap peran, login/logout, Realtime, seluruh write, dan klaim historis pada staging sebelum rollout aplikasi dan database yang terkoordinasi.
-
-`approve_portal_surat` dan `disburse_portal_reimburse` mengunci row dan menulis status, audit history, serta kas dalam satu transaksi. Pencairan berulang tidak membuat ledger ganda. Klaim legacy berstatus cair tanpa ledger terkait ditolak untuk rekonsiliasi manual. RPC hanya mencatat pencairan yang telah diverifikasi; tidak mentransfer uang ke bank.
-
-Tanpa RPC tersebut, pengajuan/read biasa tetap memakai schema existing; approval surat/pencairan memberi error eksplisit. Tidak ada fallback ke write terpisah yang dapat membuat pencairan parsial. **Policy lama masih rentan melalui REST langsung sampai SQL hardening diterapkan; server validation saja tidak memperbaikinya.**
+2. Tinjau perubahan SQL dan uji pada staging yang terisolasi sebelum diterapkan ke live. Jangan menjalankan ulang baseline pada database existing.
+3. Rekonsiliasi klaim dan ledger historis jika perubahan menyentuh pencairan. Klaim legacy berstatus cair tanpa ledger terkait memerlukan rekonsiliasi manual; migration tidak menebak hubungan transaksi historis.
+4. Uji tiap peran, login/logout, Realtime, seluruh write, dan transaksi historis sebelum rollout aplikasi dan database yang terkoordinasi.
 
 `seed_users.sh` adalah alat admin manual untuk proyek yang memang hendak diinisialisasi. Memerlukan `SUPABASE_URL`, `SERVICE_ROLE_KEY`, dan `SEED_INITIAL_PASSWORD` dari environment server. Akun baru diberi profil staff oleh trigger, lalu script mengisi peran lewat service role. Script tidak mereset akun existing dan tidak mencetak password. Jika pembuatan akun berhasil tetapi pengisian profil gagal, hentikan dan perbaiki profil lewat administrator; jangan membuat akun duplikat. Password bersama yang pernah berada dalam histori Git harus dianggap terekspos; pengelolaan kredensial existing dilakukan administrator, bukan migrasi ini.
 
@@ -97,18 +105,20 @@ npm run format:check
 npm run build
 ```
 
-Unit test mencakup matriks izin empat peran, validasi nominal/input, format data, saldo lintas tahun, attendance dan redirect aman. Test database membuat cluster PostgreSQL baru di direktori sementara, menjalankan baseline dan hardening **hanya di cluster itu**, menguji RLS, idempotency, rollback dan pencairan bersamaan, lalu menghapus cluster. Tidak membaca konfigurasi Supabase live.
+Unit test mencakup matriks izin empat peran, validasi nominal/input, format data, saldo lintas tahun, attendance dan redirect aman. Test database membuat cluster PostgreSQL baru di direktori sementara, menjalankan baseline, hardening, dan migration koordinasi/katalog **hanya di cluster itu**, menguji RLS, idempotency, rollback dan pencairan bersamaan, lalu menghapus cluster. Tidak membaca konfigurasi Supabase live.
 
 Playwright menjalankan Next.js dan fixture HTTP Supabase di `127.0.0.1:3100` dan `127.0.0.1:54328`. Kredensial fiktif hanya ada di test. E2E mencakup browser Chromium desktop/mobile. Fixture tidak membuktikan konfigurasi Supabase live atau Realtime produksi; PostgreSQL test terpisah memverifikasi SQL asli. Bila memakai lokasi browser sementara, set `PLAYWRIGHT_BROWSERS_PATH` yang sama saat install dan test.
 
 ## Batas fitur existing
 
+- Bukti reimburse dapat berupa satu link file Google Drive opsional. Anggota upload manual ke folder bersama organisasi, lalu menempelkan link file saat pengajuan. Pengurus inti membuka bukti melalui tombol "Lihat bukti" di administrasi. Kolom existing `foto_struk_url` menyimpan link; tidak perlu bucket, Google API, atau migration tambahan. Admin mengatur akses folder/file melalui akun Google pengurus terkait; login portal tidak memberi izin Drive. Portal memvalidasi format link, bukan keberadaan, isi, lokasi folder, atau izin file. Klaim lama tanpa link tetap didukung. Folder pada Drive pribadi tidak otomatis memindahkan kepemilikan atau kuota file ke pemilik folder.
+
 - Nomor surat baru adalah nomor **draf unik**, bukan nomor resmi berurutan. Sekretariat tetap menetapkan nomor resmi.
 - Approval saat ini final oleh pimpinan, belum rantai approval bertingkat atau aturan tambahan nominal tertentu.
-- QR tanda tangan/sertifikasi elektronik, cetak dokumen resmi, export LPJ/Excel, upload struk, serta berkas modul/video belum tersedia. UI menampilkan batas ini, bukan simulasi keberhasilan. Logo PNG yang tersedia dapat diunduh.
+- QR tanda tangan/sertifikasi elektronik, cetak dokumen resmi, export LPJ/Excel, upload struk langsung dari portal, serta upload berkas langsung belum tersedia. Link modul/video dapat ditambahkan melalui katalog Drive. UI menampilkan batas ini, bukan simulasi keberhasilan. Logo PNG yang tersedia dapat diunduh.
 - Target tiket masih teks bebas. Izin tanggapan mengikuti RLS existing: pimpinan atau pemohon. Akses berdasarkan keanggotaan target perlu model relasi yang disetujui dahulu.
 - RLS baseline memperbolehkan seluruh pengurus membaca direktori profil/kehadiran dan surat/tiket; UI pimpinan bukan batas kerahasiaan database. Tinjau kebijakan transparansi jika data ini perlu dibatasi.
-- Konten periode organisasi existing tidak konsisten antara 2026/2027 dan 2026/2028; tidak ditebak ulang saat migrasi.
+- Periode kepengurusan ditampilkan konsisten sebagai 2026–2028 sesuai dokumen evaluasi dan konfirmasi pemilik. Tahun transaksi dan anggaran mengikuti data masing-masing.
 - Registrasi mandiri dan reset kata sandi belum menjadi fitur portal.
 
 Tidak ada deploy, perubahan Supabase live, rotasi kredensial, atau layanan berbayar yang dilakukan dalam migrasi ini.

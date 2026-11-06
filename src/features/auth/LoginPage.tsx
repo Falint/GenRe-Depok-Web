@@ -8,13 +8,13 @@ import {
   ArrowRight,
   Eye,
   EyeOff,
-  KeyRound,
   LoaderCircle,
   LockKeyhole,
   Mail,
   ShieldCheck,
 } from 'lucide-react';
 import { loginForm } from '@/features/auth/actions';
+import { KABINET } from '@/features/organisasi/content';
 
 export default function LoginPage({
   configured,
@@ -48,20 +48,28 @@ export default function LoginPage({
           </div>
 
           <div className="relative my-16 max-w-lg lg:my-0">
-            <div className="mb-7 flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-300 text-slate-950 shadow-lg shadow-cyan-300/20">
-              <KeyRound className="h-6 w-6" aria-hidden="true" />
-            </div>
+            <Image
+              src={KABINET.logoUrl}
+              alt="Logo sementara PRIMERA"
+              width={72}
+              height={72}
+              className="mb-6"
+            />
+            <p className="mb-3 text-sm font-bold text-primera-gold">
+              Kabinet {KABINET.nama} · {KABINET.periode}
+            </p>
             <h1 className="text-4xl font-black leading-[1.05] tracking-[-0.045em] text-white sm:text-5xl">
-              Ruang kerja untuk gerak yang terarah.
+              Forum GenRe Kota Depok
             </h1>
-            <p className="mt-6 max-w-md text-sm leading-7 text-indigo-100 sm:text-base">
+            <p className="mt-4 text-base leading-7 text-primera-ivory">{KABINET.tagline}</p>
+            <p className="mt-6 max-w-md text-sm leading-7 text-primera-ivory/80 sm:text-base">
               Akses administrasi, koordinasi, dan sumber daya Forum GenRe Kota Depok dalam satu
               ruang kerja yang aman.
             </p>
           </div>
 
-          <div className="relative flex items-center gap-3 text-xs text-indigo-100">
-            <ShieldCheck className="h-4 w-4 text-cyan-300" aria-hidden="true" />
+          <div className="relative flex items-center gap-3 text-xs text-primera-ivory">
+            <ShieldCheck className="h-4 w-4 text-primera-gold" aria-hidden="true" />
             <span>Akses sesuai peran kepengurusan Anda.</span>
           </div>
         </section>

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 240 240" role="img" aria-labelledby="title desc">
+  <title id="title">PRIMERA — rancangan logo sementara</title>
+  <desc id="desc">Bintang empat sudut dan jarum emas, lima bilah navy untuk nilai PRIME, serta busur emas kolaborasi.</desc>
+  <circle cx="120" cy="120" r="118" fill="#F4F1E9"/>
+  <g fill="#172E49">
+    <path d="M113 154 95 108 101 66 117 104Z"/>
+    <path d="M111 157 66 132 46 95 89 116Z"/>
+    <path d="M111 162 61 170 24 153 74 143Z"/>
+    <path d="M115 166 88 208 51 225 78 183Z"/>
+    <path d="M121 166 131 211 120 234 107 196Z"/>
+  </g>
+  <path d="M47 63a90 90 0 1 1 133 120" fill="none" stroke="#C5A15B" stroke-width="7" stroke-linecap="round"/>
+  <path d="m166 29 9 24 24 9-24 9-9 24-9-24-24-9 24-9Z" fill="#C5A15B"/>
+  <path d="m121 165 28-69-9 55Z" fill="#C5A15B"/>
+  <circle cx="120" cy="163" r="7" fill="#C5A15B"/>
+</svg>

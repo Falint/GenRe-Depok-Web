@@ -1,4 +1,5 @@
 'use client';
+import { formatDate } from '@/features/portal/mapping';
 import { usePortal } from '@/features/portal/PortalProvider';
 import React, { useState } from 'react';
 import {
@@ -233,7 +234,10 @@ export default function AdministrasiTab() {
                       <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-slate-100 text-slate-600">
                         {surat.jenis}
                       </span>
-                      <span className="text-[11px] text-slate-400">Diajukan: {surat.tanggal}</span>
+                      <span className="text-[11px] text-slate-400">
+                        Tanggal surat: {surat.tanggal} · Diajukan {formatDate(surat.created_at)} WIB
+                        {surat.updated_at && ` · Diperbarui ${formatDate(surat.updated_at)} WIB`}
+                      </span>
                     </div>
 
                     <h3 className="font-black text-sm sm:text-base text-slate-900 group-hover:text-genre-blue transition-colors">
@@ -358,6 +362,19 @@ export default function AdministrasiTab() {
 
                   <p className="text-xs text-slate-600 mt-2 line-clamp-2">{item.keterangan}</p>
 
+                  {item.buktiStruk ? (
+                    <a
+                      href={item.buktiStruk}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-block mt-3 text-xs font-bold text-genre-blue underline rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+                    >
+                      Lihat bukti<span className="sr-only"> (buka Google Drive di tab baru)</span>
+                    </a>
+                  ) : (
+                    <p className="mt-3 text-xs text-slate-500">Bukti belum tersedia</p>
+                  )}
+
                   <div className="mt-4 p-3.5 bg-slate-50 rounded-2xl space-y-1 text-xs">
                     <p className="text-slate-500">
                       Pemohon: <strong className="text-slate-800">{item.pemohon}</strong>
@@ -372,7 +389,10 @@ export default function AdministrasiTab() {
                 </div>
 
                 <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                  <span className="text-[10px] text-slate-400">Diajukan: {item.tanggal}</span>
+                  <span className="text-[10px] text-slate-400">
+                    Tanggal klaim: {item.tanggal} · Diajukan {formatDate(item.created_at)} WIB
+                    {item.updated_at && ` · Diperbarui ${formatDate(item.updated_at)} WIB`}
+                  </span>
 
                   {canApproveFinance && !item.status.includes('Selesai') && (
                     <button
@@ -512,7 +532,10 @@ export default function AdministrasiTab() {
                   <div className="space-y-0.5">
                     <p className="font-bold text-slate-800">{trx.deskripsi}</p>
                     <div className="flex items-center space-x-2 text-[11px] text-slate-500">
-                      <span>{trx.tgl}</span>
+                      <span>
+                        Tanggal transaksi: {trx.tgl} · Dicatat {formatDate(trx.created_at)} WIB
+                        {trx.updated_at && ` · Diperbarui ${formatDate(trx.updated_at)} WIB`}
+                      </span>
                       <span>•</span>
                       <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-600 font-semibold">
                         {trx.kategori}

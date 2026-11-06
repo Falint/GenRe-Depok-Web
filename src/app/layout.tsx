@@ -12,7 +12,7 @@ const jakarta = localFont({
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
-  title: { default: 'Portal Resmi Forum GenRe Kota Depok', template: '%s | GenRe Depok' },
+  title: { default: 'Forum GenRe Kota Depok', template: '%s | Forum GenRe Kota Depok' },
   description: 'Ruang administrasi, komunikasi, dan sumber daya pengurus Forum GenRe Kota Depok.',
   robots: { index: false, follow: false },
   icons: { icon: '/logo-genre-depok.png' },

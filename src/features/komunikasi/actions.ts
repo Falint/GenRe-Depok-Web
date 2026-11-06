@@ -1,7 +1,9 @@
 'use server';
+import { z } from 'zod';
+import { attendanceOpen } from '@/features/portal/datetime';
 import { mutate, checkWrite } from '@/features/portal/mutations';
 import {
-  canApproveOrConfirm,
+  canManageContent,
   canRespondToTicket,
   requirePermission,
 } from '@/features/auth/permissions';
@@ -58,20 +60,77 @@ export async function respondTiket(id: string, response: string) {
 }
 
 export async function addPengumuman(input: PengumumanInput) {
-  return mutate('pengumuman:create', async (client, profile) => {
-    requirePermission(canApproveOrConfirm(profile.level));
+  return savePengumuman(crypto.randomUUID(), -1, input);
+}
+export async function savePengumuman(id: string, version: number, input: PengumumanInput) {
+  return mutate('pengumuman:save', async (client, profile) => {
+    requirePermission(canManageContent(profile));
     const values = parseInput(pengumumanInput, input);
-    const { error } = await client
-      .from('pengumuman')
-      .insert({ ...values, penulis_id: profile.id, penulis_nama: profile.nama_lengkap })
-      .select('id')
+    const dates = [values.deadline_konfirmasi, values.mulai_at, values.selesai_at];
+    if (
+      dates.some(Boolean) &&
+      !(
+        dates.every(Boolean) &&
+        Date.parse(dates[0]!) < Date.parse(dates[1]!) &&
+        Date.parse(dates[1]!) < Date.parse(dates[2]!)
+      )
+    )
+      throw new PortalError('Isi seluruh jadwal: deadline sebelum mulai, selesai sesudah mulai.');
+    checkWrite(
+      (
+        await client.rpc('save_portal_pengumuman', {
+          target_id: parseInput(recordId, id),
+          expected_version: parseInput(z.number().int().min(-1), version),
+          input: values,
+        })
+      ).error,
+    );
+  });
+}
+export async function cancelPengumuman(id: string, version: number, reason: string) {
+  return mutate('pengumuman:cancel', async (client, profile) => {
+    requirePermission(canManageContent(profile));
+    checkWrite(
+      (
+        await client.rpc('cancel_portal_pengumuman', {
+          target_id: parseInput(recordId, id),
+          expected_version: parseInput(z.number().int().nonnegative(), version),
+          reason: parseInput(z.string().trim().min(1).max(10000), reason),
+        })
+      ).error,
+    );
+  });
+}
+export async function setTicketDeadline(id: string, deadline: string | null) {
+  return mutate('tiket:deadline', async (client, profile) => {
+    const target = parseInput(recordId, id);
+    const { data, error } = await client
+      .from('tiket_info')
+      .select('pemohon_id')
+      .eq('id', target)
       .single();
     checkWrite(error);
+    requirePermission(!!data && canRespondToTicket(profile, data.pemohon_id));
+    checkWrite(
+      (
+        await client.rpc('set_tiket_deadline', {
+          target_id: target,
+          deadline_value: parseInput(z.iso.datetime().nullable(), deadline),
+        })
+      ).error,
+    );
   });
 }
 
 export async function confirmRead(id: string) {
   return mutate('pengumuman:confirm', async (client, profile) => {
+    const { data, error: readError } = await client
+      .from('pengumuman')
+      .select('*')
+      .eq('id', parseInput(recordId, id))
+      .single();
+    checkWrite(readError);
+    if (!data || !attendanceOpen(data)) throw new PortalError('Konfirmasi kegiatan sudah ditutup.');
     const { error } = await client
       .from('pengumuman_kehadiran')
       .upsert(

@@ -12,12 +12,13 @@ export async function readRows<T>(
   table: keyof Database['public']['Tables'],
   schema: z.ZodType<T>,
   columns = '*',
+  filters: Record<string, string> = {},
 ): Promise<T[]> {
   const rows: T[] = [];
   for (;;) {
-    const { data, count, error } = await client
-      .from(table)
-      .select(columns, { count: 'exact' })
+    let query = client.from(table).select(columns, { count: 'exact' });
+    for (const [column, value] of Object.entries(filters)) query = query.eq(column, value);
+    const { data, count, error } = await query
       .order('id')
       .range(rows.length, rows.length + PORTAL_CONFIG.PAGE_SIZE - 1);
     if (error) throw new PortalError('Data portal tidak dapat dimuat. Coba lagi.');

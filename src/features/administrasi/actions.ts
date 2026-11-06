@@ -59,6 +59,7 @@ export async function addReimburse(input: ReimburseInput) {
       .from('reimburse')
       .insert({
         ...values,
+        foto_struk_url: values.foto_struk_url || null,
         pemohon_id: profile.id,
         pemohon_nama: profile.nama_lengkap,
         divisi: profile.kelompok,

@@ -24,9 +24,11 @@ export function checkWrite(error: { code?: string } | null) {
   if (error) {
     console.error('[portal:database]', { code: error.code });
     throw new PortalError(
-      error.code === '42501'
-        ? 'Anda tidak memiliki izin untuk perubahan ini.'
-        : 'Perubahan gagal disimpan. Muat ulang sebelum mencoba lagi.',
+      error.code === '40001'
+        ? 'Data berubah. Muat ulang sebelum mencoba lagi.'
+        : error.code === '42501'
+          ? 'Anda tidak memiliki izin untuk perubahan ini.'
+          : 'Perubahan gagal disimpan. Muat ulang sebelum mencoba lagi.',
     );
   }
 }

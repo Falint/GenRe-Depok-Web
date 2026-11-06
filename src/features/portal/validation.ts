@@ -29,6 +29,22 @@ export const suratInput = z
     keterangan: note,
   })
   .strict();
+export const driveFileUrl = z
+  .string()
+  .trim()
+  .max(2048)
+  .pipe(z.url({ protocol: /^https$/, hostname: /^drive\.google\.com$/ }))
+  .refine((value) => {
+    if (!/^https:\/\//i.test(value) || !URL.canParse(value)) return false;
+    const url = new URL(value);
+    return (
+      !url.username &&
+      !url.password &&
+      !url.port &&
+      (/^\/file\/d\/[A-Za-z0-9_-]+(?:\/(?:view|preview))?\/?$/.test(url.pathname) ||
+        (url.pathname === '/open' && /^[A-Za-z0-9_-]+$/.test(url.searchParams.get('id') || '')))
+    );
+  }, 'Gunakan link file Google Drive, bukan link folder.');
 export const reimburseInput = z
   .object({
     proker: title,
@@ -36,6 +52,7 @@ export const reimburseInput = z
     keterangan: note,
     bank: shortText,
     rekening: z.string().trim().min(1).max(INPUT_LIMITS.ACCOUNT),
+    foto_struk_url: driveFileUrl.or(z.string().trim().length(0)).optional(),
   })
   .strict();
 export const tiketInput = z
@@ -44,6 +61,7 @@ export const tiketInput = z
     tujuan: shortText,
     prioritas: z.enum(['Rendah', 'Sedang', 'Tinggi', 'Mendesak']),
     deadline: z.string().trim().max(INPUT_LIMITS.SHORT_TEXT),
+    deadline_at: z.iso.datetime().nullable().optional(),
     deskripsi: text,
   })
   .strict();
@@ -53,6 +71,9 @@ export const pengumumanInput = z
     kategori: z.enum(['Urgent', 'Umum', 'Kecamatan']),
     target: shortText,
     isi: text,
+    mulai_at: z.iso.datetime().nullable().optional(),
+    selesai_at: z.iso.datetime().nullable().optional(),
+    deadline_konfirmasi: z.iso.datetime().nullable().optional(),
   })
   .strict();
 export const mutasiInput = z

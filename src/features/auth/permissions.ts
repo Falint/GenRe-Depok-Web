@@ -10,6 +10,9 @@ export const canRespondToTicket = (
   requesterId: string | null,
 ) => canApproveOrConfirm(profile.level) || requesterId === profile.id;
 
+export const canManageContent = (profile: Pick<Profile, 'level' | 'bidang_id'>) =>
+  profile.level === 'inti' || profile.bidang_id === 'branding';
+
 export function requirePermission(allowed: boolean) {
   if (!allowed) throw new PortalError('Anda tidak memiliki izin untuk tindakan ini.');
 }
@@ -21,6 +24,9 @@ export function profileToRole(profile: Profile) {
     role: profile.jabatan,
     group: profile.kelompok,
     level: profile.level,
+    bidangId: profile.bidang_id || null,
+    divisiId: profile.divisi_id || null,
+    manageContent: canManageContent(profile),
     avatar: profile.avatar || '👤',
     isBendahara: profile.level === 'inti' && profile.jabatan.toLowerCase().includes('bendahara'),
   };

@@ -47,6 +47,7 @@ before(() => {
     'GRANT USAGE ON SCHEMA public TO anon, authenticated; GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;',
   );
   sql(readFileSync('supabase/migrations/202611060001_portal_hardening.sql', 'utf8'));
+  sql(readFileSync('supabase/migrations/202611070001_coordination.sql', 'utf8'));
   for (const [index, level] of ['inti', 'kabid', 'kadiv', 'staff'].entries()) {
     sql(
       `INSERT INTO auth.users (id,email,raw_user_meta_data) VALUES ('${id(index + 1)}','test${index + 1}@example.org','{"level":"inti","jabatan":"Ketua"}');`,
@@ -184,5 +185,466 @@ test('kabid approval is idempotent and uses trusted profile actor', () => {
   assert.equal(
     sql(`SELECT actor_name FROM public.surat_approval WHERE surat_id='${id(20)}'`),
     'test2',
+  );
+});
+
+function setupCoordination() {
+  for (const [value, role, field, division] of [
+    [30, 'kadiv', 'eksternal', 'reguler'],
+    [31, 'kadiv', 'branding', 'design'],
+    [32, 'staff', 'branding', 'design'],
+    [33, 'staff', 'branding', 'design'],
+    [34, 'kadiv', 'internal', 'duta'],
+    [35, 'staff', 'internal', 'duta'],
+  ] as const) {
+    sql(
+      `INSERT INTO auth.users(id,email) VALUES ('${id(value)}','coord${value}@example.org'); UPDATE public.profiles SET level='${role}',bidang_id='${field}',divisi_id='${division}' WHERE id='${id(value)}';`,
+    );
+  }
+}
+const requestValues = (overrides: Record<string, unknown> = {}) =>
+  JSON.stringify({
+    judul: 'Bantuan acara',
+    deskripsi: 'Dokumentasi',
+    divisi_tujuan_id: 'design',
+    jumlah: 2,
+    deadline_respons: '2099-01-01T00:00:00Z',
+    mulai_at: '2099-01-02T00:00:00Z',
+    selesai_at: '2099-01-03T00:00:00Z',
+    ...overrides,
+  });
+test('panitia requires explicit placement, a target Kadiv, and cross-bidang routing', () => {
+  setupCoordination();
+  assert.throws(
+    () =>
+      sql(
+        `UPDATE public.profiles SET level='kadiv',bidang_id='branding',divisi_id='design' WHERE id='${id(4)}'`,
+      ),
+    /duplicate key/,
+  );
+  assert.throws(
+    () =>
+      sql(`UPDATE public.profiles SET bidang_id='internal',divisi_id='design' WHERE id='${id(4)}'`),
+    /foreign key/,
+  );
+  assert.throws(
+    () => sql(asUser(3, `SELECT public.create_panitia_request('${id(40)}','${requestValues()}')`)),
+    /Permission denied/,
+  );
+  assert.throws(
+    () => sql(asUser(31, `SELECT public.create_panitia_request('${id(40)}','${requestValues()}')`)),
+    /bidang lain/,
+  );
+  assert.throws(
+    () =>
+      sql(
+        asUser(
+          30,
+          `SELECT public.create_panitia_request('${id(40)}','${requestValues({ divisi_tujuan_id: 'video' })}')`,
+        ),
+      ),
+    /belum memiliki Kadiv/,
+  );
+  sql(
+    asUser(
+      30,
+      `SELECT public.create_panitia_request('${id(40)}','${requestValues()}'); SELECT public.create_panitia_request('${id(40)}','${requestValues()}');`,
+    ),
+  );
+  assert.equal(
+    sql(`SELECT count(*) FROM public.panitia_history WHERE request_id='${id(40)}'`),
+    '1',
+  );
+  assert.throws(
+    () =>
+      sql(
+        asUser(
+          30,
+          `SELECT public.create_panitia_request('${id(40)}','${requestValues({ jumlah: 3 })}')`,
+        ),
+      ),
+    /Pengajuan berubah/,
+  );
+  assert.throws(
+    () =>
+      sql(
+        asUser(
+          30,
+          `INSERT INTO public.panitia_assignments(request_id,user_id,nama) VALUES ('${id(40)}','${id(32)}','Forged')`,
+        ),
+      ),
+    /permission denied/,
+  );
+});
+test('only target Kadiv decides and assigns, partial assignment is atomic and private', () => {
+  for (const actor of [1, 2, 30, 32, 34])
+    assert.throws(
+      () => sql(asUser(actor, `SELECT public.decide_panitia_request('${id(40)}',0,true,'')`)),
+      /Permission denied/,
+    );
+  sql(asUser(31, `SELECT public.decide_panitia_request('${id(40)}',0,true,'Siap')`));
+  assert.throws(
+    () => sql(asUser(31, `SELECT public.decide_panitia_request('${id(40)}',0,false,'Duplikat')`)),
+    /Data berubah/,
+  );
+  assert.throws(
+    () =>
+      sql(
+        asUser(
+          30,
+          `SELECT public.set_panitia_assignments('${id(40)}',1,ARRAY['${id(32)}']::uuid[],'Ambil anggota')`,
+        ),
+      ),
+    /Permission denied/,
+  );
+  assert.throws(
+    () =>
+      sql(
+        asUser(
+          31,
+          `SELECT public.set_panitia_assignments('${id(40)}',1,ARRAY['${id(35)}']::uuid[],'Salah divisi')`,
+        ),
+      ),
+    /Anggota harus/,
+  );
+  assert.throws(
+    () =>
+      sql(
+        asUser(
+          31,
+          `SELECT public.set_panitia_assignments('${id(40)}',1,ARRAY['${id(32)}','${id(32)}']::uuid[],'Duplikat')`,
+        ),
+      ),
+    /duplikat/,
+  );
+  sql(
+    asUser(
+      31,
+      `SELECT public.set_panitia_assignments('${id(40)}',1,ARRAY['${id(32)}']::uuid[],'Tahap pertama')`,
+    ),
+  );
+  assert.equal(
+    sql(`SELECT status FROM public.panitia_requests WHERE id='${id(40)}'`),
+    'partially_assigned',
+  );
+  sql(
+    asUser(
+      31,
+      `SELECT public.set_panitia_assignments('${id(40)}',2,ARRAY['${id(32)}','${id(33)}']::uuid[],'Lengkap')`,
+    ),
+  );
+  assert.equal(sql(`SELECT status FROM public.panitia_requests WHERE id='${id(40)}'`), 'assigned');
+  assert.equal(
+    sql(asUser(32, `SELECT count(*) FROM public.panitia_assignments WHERE request_id='${id(40)}'`))
+      .split('\n')
+      .at(-1),
+    '1',
+  );
+  assert.equal(
+    sql(asUser(32, `SELECT count(*) FROM public.panitia_history WHERE request_id='${id(40)}'`))
+      .split('\n')
+      .at(-1),
+    '0',
+  );
+  assert.equal(
+    sql(asUser(35, `SELECT count(*) FROM public.panitia_requests WHERE id='${id(40)}'`))
+      .split('\n')
+      .at(-1),
+    '0',
+  );
+  assert.equal(
+    sql(asUser(30, `SELECT count(*) FROM public.panitia_assignments WHERE request_id='${id(40)}'`))
+      .split('\n')
+      .at(-1),
+    '2',
+  );
+  assert.equal(sql(`SELECT count(*) FROM public.pengumuman_kehadiran`), '0');
+  assert.throws(
+    () => sql(asUser(31, `DELETE FROM public.panitia_history WHERE request_id='${id(40)}'`)),
+    /permission denied/,
+  );
+  sql(
+    `CREATE FUNCTION public.reject_panitia_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'Audit failed'; END; $$; CREATE TRIGGER reject_panitia BEFORE INSERT ON public.panitia_history FOR EACH ROW EXECUTE FUNCTION public.reject_panitia_audit();`,
+  );
+  try {
+    assert.throws(
+      () =>
+        sql(
+          asUser(
+            31,
+            `SELECT public.set_panitia_assignments('${id(40)}',3,ARRAY[]::uuid[],'Dilepas')`,
+          ),
+        ),
+      /Audit failed/,
+    );
+  } finally {
+    sql(
+      'DROP TRIGGER reject_panitia ON public.panitia_history; DROP FUNCTION public.reject_panitia_audit();',
+    );
+  }
+  assert.equal(
+    sql(`SELECT count(*) FROM public.panitia_assignments WHERE request_id='${id(40)}'`),
+    '2',
+  );
+  sql(
+    asUser(
+      31,
+      `SELECT public.set_panitia_assignments('${id(40)}',3,ARRAY['${id(33)}']::uuid[],'Satu berhalangan')`,
+    ),
+  );
+  assert.equal(
+    sql(
+      `SELECT removed->0->>'id' FROM public.panitia_history WHERE request_id='${id(40)}' AND reason='Satu berhalangan'`,
+    ),
+    id(32),
+  );
+  sql(
+    `UPDATE public.panitia_requests SET deadline_respons=now()-interval '3 hours',mulai_at=now()-interval '2 hours',selesai_at=now()-interval '1 hour' WHERE id='${id(40)}'`,
+  );
+  assert.throws(
+    () =>
+      sql(
+        asUser(
+          31,
+          `SELECT public.set_panitia_assignments('${id(40)}',4,ARRAY[]::uuid[],'Terlambat')`,
+        ),
+      ),
+    /sudah dimulai/,
+  );
+});
+test('content management denies unplaced users and nonbranding kabid, records audit and cancellation', () => {
+  const content = JSON.stringify({
+    judul: 'Kegiatan',
+    kategori: 'Umum',
+    target: 'Semua',
+    isi: 'Isi',
+  });
+  for (const actor of [2, 3, 4, 30, 35])
+    assert.throws(
+      () => sql(asUser(actor, `SELECT public.save_portal_pengumuman('${id(50)}',-1,'${content}')`)),
+      /Permission denied/,
+    );
+  sql(asUser(32, `SELECT public.save_portal_pengumuman('${id(50)}',-1,'${content}')`));
+  sql(asUser(1, `SELECT public.save_portal_pengumuman('${id(50)}',0,'${content}')`));
+  sql(
+    asUser(
+      35,
+      `INSERT INTO public.pengumuman_kehadiran(pengumuman_id,user_id,confirmed_at,is_late) VALUES ('${id(50)}','${id(35)}','1900-01-01',true)`,
+    ),
+  );
+  assert.equal(
+    sql(
+      `SELECT confirmed_at > '2026-01-01' AND NOT is_late FROM public.pengumuman_kehadiran WHERE pengumuman_id='${id(50)}'`,
+    ),
+    't',
+  );
+  sql(asUser(32, `SELECT public.cancel_portal_pengumuman('${id(50)}',1,'Hujan')`));
+  assert.throws(
+    () =>
+      sql(
+        asUser(
+          4,
+          `INSERT INTO public.pengumuman_kehadiran(pengumuman_id,user_id) VALUES ('${id(50)}','${id(4)}')`,
+        ),
+      ),
+    /sudah ditutup/,
+  );
+  assert.equal(sql(`SELECT count(*) FROM public.content_history WHERE entity_id='${id(50)}'`), '3');
+  assert.equal(
+    sql(`SELECT count(*) FROM public.pengumuman_kehadiran WHERE pengumuman_id='${id(50)}'`),
+    '1',
+  );
+  const late = JSON.stringify({
+    judul: 'Kegiatan terlambat',
+    kategori: 'Umum',
+    target: 'Semua',
+    isi: 'Isi',
+    deadline_konfirmasi: new Date(Date.now() - 3600000).toISOString(),
+    mulai_at: new Date(Date.now() + 3600000).toISOString(),
+    selesai_at: new Date(Date.now() + 7200000).toISOString(),
+  });
+  sql(asUser(32, `SELECT public.save_portal_pengumuman('${id(51)}',-1,'${late}')`));
+  sql(
+    asUser(
+      35,
+      `INSERT INTO public.pengumuman_kehadiran(pengumuman_id,user_id) VALUES ('${id(51)}','${id(35)}')`,
+    ),
+  );
+  assert.equal(
+    sql(`SELECT is_late FROM public.pengumuman_kehadiran WHERE pengumuman_id='${id(51)}'`),
+    't',
+  );
+  sql(
+    `UPDATE public.pengumuman SET deadline_konfirmasi=now()-interval '3 hours',mulai_at=now()-interval '2 hours',selesai_at=now()-interval '1 hour' WHERE id='${id(51)}'`,
+  );
+  assert.throws(
+    () =>
+      sql(
+        asUser(
+          4,
+          `INSERT INTO public.pengumuman_kehadiran(pengumuman_id,user_id) VALUES ('${id(51)}','${id(4)}')`,
+        ),
+      ),
+    /sudah ditutup/,
+  );
+});
+test('media catalog preserves 12 resources, restricts links, archives and restores without deletion', () => {
+  sql(readFileSync('supabase/migrations/202611070002_media_catalog.sql', 'utf8'));
+  sql(readFileSync('supabase/migrations/202611070002_media_catalog.sql', 'utf8'));
+  assert.equal(sql('SELECT count(*) FROM public.media_resources'), '12');
+  assert.equal(
+    sql('SELECT count(*) FROM public.media_resources WHERE created_at IS NOT NULL'),
+    '0',
+  );
+  const input = (url: string) =>
+    JSON.stringify({ jenis: 'modul', judul: 'Baru', deskripsi: 'Materi', url });
+  for (const actor of [2, 3, 4, 30, 35])
+    assert.throws(
+      () =>
+        sql(
+          asUser(
+            actor,
+            `SELECT public.save_portal_media('${id(60)}',-1,'${input('https://drive.google.com/file/d/abc/view')}')`,
+          ),
+        ),
+      /Permission denied/,
+    );
+  for (const url of [
+    'javascript:alert(1)',
+    'https://evil.org/file/d/x',
+    'https://drive.google.com/drive/folders/abc',
+    'https://drive.google.com@evil.org/file/d/a',
+    'https://drive.google.com:8080/file/d/a',
+  ])
+    assert.throws(
+      () => sql(asUser(32, `SELECT public.save_portal_media('${id(60)}',-1,'${input(url)}')`)),
+      /Google Drive/,
+    );
+  sql(
+    asUser(
+      32,
+      `SELECT public.save_portal_media('${id(60)}',-1,'${input('https://drive.google.com/file/d/abc/view')}')`,
+    ),
+  );
+  sql(asUser(1, `SELECT public.archive_portal_media('${id(60)}',0,true)`));
+  assert.equal(
+    sql(asUser(35, `SELECT count(*) FROM public.media_resources WHERE id='${id(60)}'`))
+      .split('\n')
+      .at(-1),
+    '0',
+  );
+  sql(asUser(32, `SELECT public.archive_portal_media('${id(60)}',1,false)`));
+  assert.equal(
+    sql(asUser(35, `SELECT count(*) FROM public.media_resources WHERE id='${id(60)}'`))
+      .split('\n')
+      .at(-1),
+    '1',
+  );
+  assert.equal(sql(`SELECT count(*) FROM public.content_history WHERE entity_id='${id(60)}'`), '3');
+});
+
+test('concurrent target decisions commit once and overdue requests remain processable before start', async () => {
+  sql(asUser(30, `SELECT public.create_panitia_request('${id(41)}','${requestValues()}')`));
+  sql(
+    `UPDATE public.panitia_requests SET deadline_respons=now()-interval '1 hour' WHERE id='${id(41)}'`,
+  );
+  const call = () =>
+    new Promise<boolean>((resolve, reject) => {
+      const process = spawn('psql', args, { stdio: ['pipe', 'ignore', 'pipe'] });
+      process.on('error', reject);
+      process.on('close', (code) => resolve(code === 0));
+      process.stdin.end(
+        asUser(
+          31,
+          `SELECT public.decide_panitia_request('${id(41)}',0,true,'Siap meski terlambat')`,
+        ),
+      );
+    });
+  const results = await Promise.all([call(), call(), call()]);
+  assert.equal(results.filter(Boolean).length, 1);
+  assert.equal(sql(`SELECT version FROM public.panitia_requests WHERE id='${id(41)}'`), '1');
+  assert.equal(
+    sql(`SELECT count(*) FROM public.panitia_history WHERE request_id='${id(41)}'`),
+    '2',
+  );
+  sql(asUser(30, `SELECT public.create_panitia_request('${id(42)}','${requestValues()}')`));
+  assert.throws(
+    () => sql(asUser(31, `SELECT public.decide_panitia_request('${id(42)}',0,false,'')`)),
+    /Alasan/,
+  );
+  sql(
+    asUser(
+      31,
+      `SELECT public.decide_panitia_request('${id(42)}',0,false,'Anggota tidak tersedia')`,
+    ),
+  );
+  assert.throws(
+    () =>
+      sql(
+        asUser(
+          31,
+          `SELECT public.set_panitia_assignments('${id(42)}',1,ARRAY['${id(32)}']::uuid[],'Mencoba')`,
+        ),
+      ),
+    /Data berubah/,
+  );
+});
+test('current roles and placements govern panitia after account reassignment', () => {
+  sql(`UPDATE public.profiles SET level='staff',divisi_id='reguler' WHERE id='${id(30)}'`);
+  assert.equal(
+    sql(asUser(30, `SELECT count(*) FROM public.panitia_assignments WHERE request_id='${id(40)}'`))
+      .split('\n')
+      .at(-1),
+    '0',
+  );
+  assert.equal(
+    sql(asUser(30, `SELECT count(*) FROM public.panitia_history WHERE request_id='${id(40)}'`))
+      .split('\n')
+      .at(-1),
+    '0',
+  );
+  sql(`UPDATE public.profiles SET level='kadiv' WHERE id='${id(30)}'`);
+  sql(`UPDATE public.profiles SET divisi_id='video' WHERE id='${id(31)}'`);
+  assert.throws(
+    () =>
+      sql(
+        asUser(
+          31,
+          `SELECT public.set_panitia_assignments('${id(41)}',1,ARRAY['${id(32)}']::uuid[],'Divisi berubah')`,
+        ),
+      ),
+    /Permission denied/,
+  );
+  sql(`UPDATE public.profiles SET divisi_id='design' WHERE id='${id(31)}'`);
+  sql(`UPDATE public.profiles SET bidang_id='internal',divisi_id='duta' WHERE id='${id(32)}'`);
+  assert.throws(
+    () =>
+      sql(
+        asUser(
+          31,
+          `SELECT public.set_panitia_assignments('${id(41)}',1,ARRAY['${id(32)}']::uuid[],'Anggota pindah divisi')`,
+        ),
+      ),
+    /Anggota harus/,
+  );
+  sql(`UPDATE public.profiles SET bidang_id='branding',divisi_id='design' WHERE id='${id(32)}'`);
+});
+
+test('new feature tables and functions deny anonymous writes; announcements cannot be truncated by users', () => {
+  assert.throws(
+    () => sql(`SET ROLE anon; SELECT public.can_manage_content()`),
+    /permission denied/,
+  );
+  assert.throws(
+    () => sql(`SET ROLE anon; SELECT * FROM public.panitia_requests`),
+    /permission denied/,
+  );
+  assert.throws(() => sql(asUser(32, 'TRUNCATE public.pengumuman CASCADE')), /permission denied/);
+  assert.throws(() => sql(asUser(32, 'TRUNCATE public.pengumuman_kehadiran')), /permission denied/);
+  assert.equal(
+    sql(
+      "SELECT count(*) FROM pg_catalog.pg_publication_tables WHERE pubname='supabase_realtime' AND schemaname='public' AND tablename='profiles'",
+    ),
+    '1',
   );
 });

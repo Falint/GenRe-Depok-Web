@@ -1,9 +1,10 @@
 'use client';
 import type { CreateModalProps } from './modal-types';
 import type { ReimburseInput } from '@/features/portal/validation';
+import { driveFileUrl } from '@/features/portal/validation';
 import Dialog from './Dialog';
 import React, { useState } from 'react';
-import { X, Receipt, Upload, CreditCard, AlertCircle } from 'lucide-react';
+import { X, Receipt, CreditCard, AlertCircle } from 'lucide-react';
 
 export default function CreateReimburseModal({
   isOpen,
@@ -19,7 +20,9 @@ export default function CreateReimburseModal({
     bank: 'Bank BCA',
     rekening: '',
     namaPemilik: currentRole.name,
+    foto_struk_url: '',
   });
+  const [proofError, setProofError] = useState('');
 
   if (!isOpen) return null;
 
@@ -30,6 +33,12 @@ export default function CreateReimburseModal({
       return;
     }
 
+    const proofUrl = formData.foto_struk_url.trim();
+    if (proofUrl && !driveFileUrl.safeParse(proofUrl).success) {
+      setProofError('Masukkan link file HTTPS Google Drive yang valid, bukan link folder.');
+      return;
+    }
+    setProofError('');
     const nominalNumber = Number(formData.nominal);
     const newReimburse = {
       proker: formData.proker,
@@ -37,6 +46,7 @@ export default function CreateReimburseModal({
       keterangan: formData.keterangan,
       bank: formData.bank,
       rekening: `${formData.rekening} a.n ${formData.namaPemilik}`,
+      foto_struk_url: proofUrl,
     };
 
     if (await onSubmit(newReimburse)) onClose();
@@ -180,16 +190,41 @@ export default function CreateReimburseModal({
 
           {/* Struk Upload Preview Simulator */}
           <div>
-            <p className="block font-bold text-slate-700 mb-1">Foto Bukti Struk / Kuitansi Fisik</p>
-            <div className="border-2 border-dashed border-slate-300 rounded-xl p-4 text-center hover:bg-slate-50 transition-colors cursor-pointer flex flex-col items-center">
-              <Upload className="w-6 h-6 text-slate-400 mb-1" />
-              <p className="font-semibold text-slate-700 text-xs">
-                Upload bukti belum tersedia. Simpan bukti untuk verifikasi pengurus.
+            <a
+              href="https://drive.google.com/drive/folders/1dwPzew_4AiO-Tfy_AeEgM-BMlWWU4vOb?usp=sharing"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block mb-2 px-3 py-2 rounded-xl bg-blue-50 text-genre-blue font-bold text-xs underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+            >
+              Buka folder upload<span className="sr-only"> (buka Google Drive di tab baru)</span>
+            </a>
+            <label className="block font-bold text-slate-700 mb-1" htmlFor="reimburse-proof">
+              Link bukti Google Drive (opsional)
+            </label>
+            <input
+              id="reimburse-proof"
+              type="url"
+              maxLength={2048}
+              placeholder="https://drive.google.com/file/d/.../view"
+              value={formData.foto_struk_url}
+              onChange={(e) => {
+                setFormData({ ...formData, foto_struk_url: e.target.value });
+                setProofError('');
+              }}
+              aria-invalid={Boolean(proofError)}
+              aria-describedby={`reimburse-proof-hint${proofError ? ' reimburse-proof-error' : ''}`}
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-genre-blue/30 focus:outline-none"
+            />
+            <p id="reimburse-proof-hint" className="mt-1 text-xs text-slate-500">
+              Upload struk ke folder Drive bersama organisasi, lalu tempel link file fotonya.
+              Pastikan pengurus pemeriksa memiliki akses lewat akun Google mereka. Portal hanya
+              menyimpan link dan tidak memeriksa izin Drive.
+            </p>
+            {proofError && (
+              <p id="reimburse-proof-error" role="alert" className="mt-1 text-xs text-red-600">
+                {proofError}
               </p>
-              <p className="text-[10px] text-slate-400">
-                Klaim ini hanya menyimpan rincian dan rekening.
-              </p>
-            </div>
+            )}
           </div>
 
           <div className="p-3 bg-blue-50 rounded-xl border border-blue-200 flex items-start space-x-2 text-blue-900 text-xs">

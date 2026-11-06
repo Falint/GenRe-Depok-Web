@@ -1,4 +1,5 @@
 'use client';
+import { fromWib } from '@/features/portal/datetime';
 import type { CreateModalProps } from './modal-types';
 import type { TiketInput } from '@/features/portal/validation';
 import Dialog from './Dialog';
@@ -31,7 +32,14 @@ export default function CreateTiketModal({
 
     const newTiket = formData;
 
-    if (await onSubmit(newTiket)) onClose();
+    if (
+      await onSubmit({
+        ...newTiket,
+        deadline_at: formData.deadline ? fromWib(formData.deadline) : null,
+        deadline: '',
+      })
+    )
+      onClose();
   };
 
   return (
@@ -127,10 +135,10 @@ export default function CreateTiketModal({
 
           <div>
             <label className="block font-bold text-slate-700 mb-1" htmlFor="createtiketmodal-4">
-              Tenggat Waktu Dibutuhkan (Target Date)
+              Tenggat Waktu Dibutuhkan (WIB, opsional)
             </label>
             <input
-              type="text"
+              type="datetime-local"
               placeholder="Contoh: 08 November 2026, 17:00 WIB"
               value={formData.deadline}
               onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}

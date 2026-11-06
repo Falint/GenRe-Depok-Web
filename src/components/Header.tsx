@@ -7,6 +7,7 @@ import logoGenreDepok from '../../public/logo-genre-depok.png';
 import type { CurrentRole } from '@/features/auth/permissions';
 import React from 'react';
 import { Bell, LogOut } from 'lucide-react';
+import { KABINET } from '@/features/organisasi/content';
 
 export default function Header({
   currentRole,
@@ -57,13 +58,13 @@ export default function Header({
               />
             </div>
 
-            <div className="hidden sm:block">
+            <div className="hidden lg:block">
               <div className="flex items-center space-x-2">
                 <span className="font-black text-slate-900 tracking-tight text-sm sm:text-lg">
-                  Forum GenRe Depok
+                  Forum GenRe Kota Depok
                 </span>
                 <span className="text-[10px] font-extrabold uppercase bg-genre-orange/15 text-genre-orange px-2 py-0.5 rounded-full border border-genre-orange/20 hidden md:inline">
-                  Resmi 2026/2028
+                  {KABINET.periode}
                 </span>
               </div>
               <p className="text-[10px] sm:text-xs text-slate-500 hidden sm:block">
@@ -119,6 +120,18 @@ export default function Header({
               <LogOut className="w-4 h-4" />
             </button>
           </div>
+        </div>
+      </div>
+      <div className="border-t border-primera-gold/30 bg-primera-ivory text-primera-navy">
+        <div className="mx-auto flex max-w-7xl items-center gap-2 px-4 py-2 sm:px-6 lg:px-8">
+          <Image src={KABINET.logoUrl} alt="Logo sementara PRIMERA" width={28} height={28} />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-bold lg:hidden">Forum GenRe Kota Depok</p>
+            <p className="text-[11px] sm:text-xs">
+              Kabinet {KABINET.nama} <span className="text-slate-600">· {KABINET.periode}</span>
+            </p>
+          </div>
+          <p className="hidden max-w-sm text-right text-xs sm:block">{KABINET.tagline}</p>
         </div>
       </div>
     </header>

@@ -6,6 +6,7 @@ import logoSalamGenre from '../../../public/logo-salam-genre.png';
 import logoGenreDepok from '../../../public/logo-genre-depok.png';
 import React, { useState } from 'react';
 import { Award, ShieldCheck, BookOpen, Mail, CheckCircle2, Star } from 'lucide-react';
+import { KABINET } from './content';
 
 export default function ProfilForumTab() {
   const [activeSection, setActiveSection] = useState('tentang'); // 'tentang' | 'pilar' | 'program' | 'prestasi' | 'mitra'
@@ -13,8 +14,8 @@ export default function ProfilForumTab() {
   return (
     <div className="space-y-8 pb-20 md:pb-8">
       {/* Hero Banner Profil dengan 4 Logo Resmi */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-genre-blue-dark via-genre-blue to-genre-blue-dark text-white p-6 sm:p-10 shadow-xl">
-        <div className="absolute -right-12 -top-12 w-64 h-64 bg-genre-orange/20 rounded-full blur-3xl pointer-events-none" />
+      <div className="relative overflow-hidden rounded-3xl bg-primera-navy text-white p-6 sm:p-10 shadow-xl">
+        <div className="absolute -right-12 -top-12 w-64 h-64 bg-primera-teal/20 rounded-full blur-3xl pointer-events-none" />
 
         {/* 4 Logos Header */}
         <div className="flex items-center justify-between flex-wrap gap-4 bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/20 mb-6">
@@ -51,19 +52,25 @@ export default function ProfilForumTab() {
           </div>
 
           <div className="text-right">
-            <span className="text-[10px] font-mono uppercase bg-white/20 text-blue-100 px-3 py-1 rounded-full border border-white/20">
+            <span className="inline-block text-[10px] font-mono uppercase bg-white/20 text-blue-100 px-3 py-1 rounded-full border border-white/20">
               SK WALIKOTA NO. 100.3.3.3/61/Kpts/DP3AP2KB/Huk/2026
             </span>
           </div>
         </div>
 
         <div className="space-y-2 max-w-3xl">
-          <span className="text-xs font-black uppercase tracking-wider bg-genre-orange text-white px-3 py-1 rounded-full shadow-sm">
-            #EraBaruLebihSeru • 2026/2028
-          </span>
+          <div className="mb-4 flex items-center gap-3">
+            <Image src={KABINET.logoUrl} alt="Logo sementara PRIMERA" width={64} height={64} />
+            <p className="text-sm font-bold text-primera-gold">
+              Kabinet {KABINET.nama} · {KABINET.periode}
+            </p>
+          </div>
           <h1 className="text-2xl sm:text-4xl font-black tracking-tight leading-tight">
             Forum Generasi Berencana (GenRe) Kota Depok
           </h1>
+          <p className="text-sm font-semibold leading-relaxed text-primera-ivory">
+            {KABINET.tagline}
+          </p>
           <p className="text-sm sm:text-base text-blue-100 font-medium leading-relaxed">
             Mitra Strategis Dinas DP3AP2KB Kota Depok dalam Mewujudkan Remaja Berkarakter, Sehat,
             dan Berencana Menuju <em>&quot;Membangun Generasi Emas Depok Maju&quot;</em>.
@@ -98,6 +105,26 @@ export default function ProfilForumTab() {
           </div>
         </div>
       </div>
+
+      <section
+        aria-labelledby="nilai-prime"
+        className="rounded-2xl border-l-4 border-primera-teal bg-primera-ivory p-5 sm:p-6 text-primera-navy"
+      >
+        <h2 id="nilai-prime" className="text-lg font-bold">
+          PRIMERA · PRIME ERA
+        </h2>
+        <p className="mt-1 text-sm">Lima nilai PRIME yang menjadi pegangan gerak kabinet.</p>
+        <ul className="mt-4 flex flex-wrap gap-2">
+          {KABINET.nilai.map((nilai) => (
+            <li
+              key={nilai}
+              className="rounded-lg border border-primera-navy/20 px-3 py-2 text-sm font-semibold"
+            >
+              {nilai}
+            </li>
+          ))}
+        </ul>
+      </section>
 
       {/* Navigasi Sub-Tab Profil */}
       <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200 overflow-x-auto">

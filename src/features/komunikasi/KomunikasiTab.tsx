@@ -1,4 +1,10 @@
 'use client';
+import { useNow } from '@/features/portal/useNow';
+import PanitiaTab from '@/features/panitia/PanitiaTab';
+import AnnouncementControls from './AnnouncementControls';
+import TicketDeadline from './TicketDeadline';
+import { fromWib, wibInput, attendanceOpen } from '@/features/portal/datetime';
+import { formatDate } from '@/features/portal/mapping';
 import type { PengumumanInput } from '@/features/portal/validation';
 import { pengumumanInput } from '@/features/portal/validation';
 import { canRespondToTicket } from '@/features/auth/permissions';
@@ -8,6 +14,7 @@ import { MessageSquare, Radio, Plus, Clock, CheckCircle2, Eye, Users } from 'luc
 import { canViewAttendanceList } from '@/features/auth/permissions';
 
 export default function KomunikasiTab() {
+  const now = useNow();
   const {
     currentRole,
     pengumumanList,
@@ -35,7 +42,7 @@ export default function KomunikasiTab() {
     isi: '',
   });
 
-  const canBroadcast = ['inti', 'kabid'].includes(currentRole.level);
+  const canBroadcast = currentRole.manageContent;
   const hasAttendanceAccess = canViewAttendanceList(currentRole.level);
 
   const handleBroadcastSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -76,7 +83,7 @@ export default function KomunikasiTab() {
           </p>
         </div>
 
-        <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200 self-start sm:self-auto">
+        <div className="flex flex-wrap bg-slate-100 p-1 rounded-2xl border border-slate-200 self-start sm:self-auto">
           <button
             onClick={() => setSubTab('pengumuman')}
             className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
@@ -99,8 +106,16 @@ export default function KomunikasiTab() {
             <MessageSquare className="w-3.5 h-3.5" />
             <span>Request Info ({tiketList.length})</span>
           </button>
+          <button
+            onClick={() => setSubTab('panitia')}
+            className={`rounded-xl px-3 py-2 text-xs font-bold ${subTab === 'panitia' ? 'bg-white text-genre-blue shadow-sm' : 'text-slate-600'}`}
+          >
+            Kebutuhan Panitia
+          </button>
         </div>
       </div>
+
+      {subTab === 'panitia' && <PanitiaTab />}
 
       {/* ===================== SUBTAB 1: PAPAN PENGUMUMAN ===================== */}
       {subTab === 'pengumuman' && (
@@ -186,6 +201,27 @@ export default function KomunikasiTab() {
                   required
                   aria-label="Isi instruksi atau pengumuman secara rinci..."
                 />
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {(['deadline_konfirmasi', 'mulai_at', 'selesai_at'] as const).map((key, i) => (
+                    <label key={key}>
+                      {['Deadline konfirmasi', 'Mulai kegiatan', 'Selesai kegiatan'][i]} (WIB)
+                      <input
+                        type="datetime-local"
+                        value={wibInput(broadcastData[key])}
+                        onChange={(e) =>
+                          setBroadcastData({
+                            ...broadcastData,
+                            [key]: e.target.value ? fromWib(e.target.value) : null,
+                          })
+                        }
+                        className="mt-1 w-full rounded-xl border p-2"
+                      />
+                    </label>
+                  ))}
+                </div>
+                <p className="text-xs text-slate-500">
+                  Opsional: isi ketiga jadwal untuk kegiatan. Deadline harus sebelum mulai.
+                </p>
                 <div className="flex justify-end space-x-2">
                   <button
                     type="button"
@@ -270,7 +306,7 @@ export default function KomunikasiTab() {
                       {/* Confirm attendance / read receipt button */}
                       <button
                         onClick={() => !hasUserRead && onConfirmRead(item.id)}
-                        disabled={hasUserRead || busy}
+                        disabled={hasUserRead || busy || !attendanceOpen(item, now)}
                         className={`text-xs px-3.5 py-1.5 rounded-xl font-bold flex items-center space-x-1 transition-all ${
                           hasUserRead
                             ? 'bg-emerald-100 text-emerald-800'
@@ -278,7 +314,13 @@ export default function KomunikasiTab() {
                         }`}
                       >
                         <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>{hasUserRead ? 'Sudah Konfirmasi' : 'Konfirmasi Hadir'}</span>
+                        <span>
+                          {hasUserRead
+                            ? 'Sudah Konfirmasi'
+                            : !attendanceOpen(item, now)
+                              ? 'Konfirmasi Ditutup'
+                              : 'Konfirmasi Hadir'}
+                        </span>
                       </button>
                     </div>
                   </div>
@@ -287,6 +329,31 @@ export default function KomunikasiTab() {
                     {item.isi}
                   </p>
 
+                  {item.cancelled_at && (
+                    <p className="mt-3 rounded-xl bg-rose-50 p-3 text-sm text-rose-800">
+                      Dibatalkan · {item.cancellation_reason}
+                    </p>
+                  )}
+                  {item.mulai_at && (
+                    <p className="mt-3 text-xs text-slate-600">
+                      Kegiatan {formatDate(item.mulai_at)} – {formatDate(item.selesai_at || null)}{' '}
+                      WIB · Deadline konfirmasi {formatDate(item.deadline_konfirmasi || null)} WIB
+                    </p>
+                  )}
+                  {item.deadline_konfirmasi &&
+                    attendanceOpen(item, now) &&
+                    Date.parse(item.deadline_konfirmasi) < now && (
+                      <p className="text-xs text-amber-800">
+                        Konfirmasi setelah deadline dicatat terlambat; masih dibuka sampai kegiatan
+                        dimulai.
+                      </p>
+                    )}
+                  {item.updated_at && (
+                    <p className="mt-2 text-xs text-slate-500">
+                      Diperbarui {formatDate(item.updated_at)} WIB
+                    </p>
+                  )}
+                  <AnnouncementControls item={item} />
                   <div className="mt-3 flex items-center justify-between text-[11px] text-slate-400">
                     <span className="flex items-center">
                       <Eye className="w-3.5 h-3.5 mr-1" /> Dikonfirmasi oleh {readCount} pengurus
@@ -343,7 +410,10 @@ export default function KomunikasiTab() {
                         Prioritas: {tiket.prioritas}
                       </span>
                       <span className="text-xs text-slate-400 flex items-center">
-                        <Clock className="w-3.5 h-3.5 mr-1" /> Deadline: {tiket.deadline}
+                        <Clock className="w-3.5 h-3.5 mr-1" /> Deadline:{' '}
+                        {tiket.deadline_at
+                          ? `${formatDate(tiket.deadline_at)} WIB`
+                          : tiket.deadline || 'Belum ditetapkan'}
                       </span>
                     </div>
 
@@ -378,6 +448,11 @@ export default function KomunikasiTab() {
                   {tiket.deskripsi}
                 </div>
 
+                <p className="text-xs text-slate-500">
+                  Dibuat {formatDate(tiket.created_at)} WIB
+                  {tiket.updated_at && ` · Diperbarui ${formatDate(tiket.updated_at)} WIB`}
+                </p>
+                <TicketDeadline ticket={tiket} />
                 {/* Response / Thread Section */}
                 <div className="pt-2 border-t border-slate-100">
                   <div className="p-3.5 bg-purple-50/50 rounded-2xl border border-purple-100 space-y-1">

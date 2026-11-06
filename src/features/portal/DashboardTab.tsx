@@ -1,6 +1,11 @@
 'use client';
+import { useNow } from '@/features/portal/useNow';
+import Calendar from './Calendar';
+import { attendanceOpen } from '@/features/portal/datetime';
 import { usePortal } from '@/features/portal/PortalProvider';
 import React from 'react';
+import Image from 'next/image';
+import { KABINET } from '@/features/organisasi/content';
 import {
   FileText,
   CreditCard,
@@ -18,6 +23,7 @@ import {
 import { canViewAdminFinance, canApproveOrConfirm } from '@/features/auth/permissions';
 
 export default function DashboardTab() {
+  const now = useNow();
   const {
     currentRole,
     suratList,
@@ -45,15 +51,23 @@ export default function DashboardTab() {
   const pendingReimburse = reimburseList.filter((r) => r.status.includes('Menunggu'));
   const openTiket = tiketList.filter((t) => t.status !== 'Selesai');
 
-  const urgentAnnouncement = pengumumanList.find((p) => p.kategori === 'Urgent');
+  const urgentAnnouncement = pengumumanList.find(
+    (p) => p.kategori === 'Urgent' && attendanceOpen(p, now),
+  );
   const acknowledgedUrgent =
     urgentAnnouncement?.readList.some((row) => row.userId === currentRole.userId) ?? false;
 
   return (
     <div className="space-y-6 pb-20 md:pb-6">
       {/* Role Banner & Dynamic Greeting */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-genre-blue to-genre-blue-dark p-6 sm:p-8 text-white shadow-xl shadow-blue-900/10">
-        <div className="absolute -right-10 -bottom-10 w-56 h-56 bg-genre-orange/20 rounded-full blur-3xl pointer-events-none" />
+      <div className="relative overflow-hidden rounded-3xl bg-primera-navy p-6 sm:p-8 text-white shadow-xl shadow-blue-900/10">
+        <div className="mb-5 flex items-center gap-3 border-b border-primera-gold/30 pb-5">
+          <Image src={KABINET.logoUrl} alt="Logo sementara PRIMERA" width={48} height={48} />
+          <div>
+            <p className="font-bold text-primera-gold">Kabinet {KABINET.nama}</p>
+            <p className="mt-1 text-xs leading-relaxed text-primera-ivory">{KABINET.tagline}</p>
+          </div>
+        </div>
 
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-start space-x-4">
@@ -61,11 +75,11 @@ export default function DashboardTab() {
               {currentRole.avatar}
             </div>
             <div>
-              <div className="flex items-center space-x-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs font-bold uppercase tracking-wider bg-white/20 px-2.5 py-0.5 rounded-full backdrop-blur-sm">
                   {currentRole.group}
                 </span>
-                <span className="text-xs text-blue-200">Masa Bakti 2026/2027</span>
+                <span className="text-xs text-primera-ivory">Masa Bakti {KABINET.periode}</span>
               </div>
               <h1 className="text-xl sm:text-2xl font-black tracking-tight mt-1">
                 Halo, {currentRole.name}!
@@ -118,6 +132,8 @@ export default function DashboardTab() {
           </div>
         </div>
       </div>
+
+      <Calendar />
 
       {/* Urgent Announcement Alert */}
       {urgentAnnouncement && (

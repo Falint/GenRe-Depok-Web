@@ -22,7 +22,9 @@ export default function AttendanceListModal({
     return {
       ...member,
       hasRead: Boolean(readInfo),
-      confirmedAt: readInfo ? readInfo.confirmedAt : '-',
+      confirmedAt: readInfo
+        ? `${readInfo.confirmedAt}${readInfo.isLate ? ' · Terlambat' : ''}`
+        : '-',
     };
   });
 

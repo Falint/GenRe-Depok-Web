@@ -1,3 +1,26 @@
+export const SEKRETARIAT_TEMPLATES = [
+  {
+    nama: 'Notulensi',
+    deskripsi: 'Catat pembahasan, keputusan, dan tindak lanjut rapat.',
+    url: 'https://docs.google.com/document/d/14PpPOD7p1jKr5b5wnxbnRbGINcqeuuR2Nm3WhdNm3FE/edit?usp=sharing',
+  },
+  {
+    nama: 'MOU',
+    deskripsi: 'Siapkan dokumen kesepahaman kerja sama dengan mitra.',
+    url: 'https://docs.google.com/document/d/1dloC1Me-inrEvHhLf5OoZERjGb1gGnSkaoX3tSuUnSo/edit?usp=sharing',
+  },
+  {
+    nama: 'Surat Dispensasi',
+    deskripsi: 'Ajukan dispensasi untuk keperluan kegiatan organisasi.',
+    url: 'https://docs.google.com/document/d/1yMm27xaol27tEkBI-Da7NQkHGo7s3iPg/edit?usp=sharing',
+  },
+  {
+    nama: 'Surat Undangan',
+    deskripsi: 'Susun undangan resmi kegiatan dan pertemuan.',
+    url: 'https://docs.google.com/document/d/1QxxmqhblQLQIrGTaOZXBrE3YsPcJM8c7Vj3I2lMR8vE/edit?usp=sharing',
+  },
+];
+
 export const MEDIA_LIBRARY = {
   modulPengetahuan: [
     {

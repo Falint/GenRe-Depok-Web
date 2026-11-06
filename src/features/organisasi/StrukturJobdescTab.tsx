@@ -13,7 +13,7 @@ import {
   Building2,
   BookOpen,
 } from 'lucide-react';
-import { JOBDESC_DATA } from './content';
+import { JOBDESC_DATA, KABINET } from './content';
 
 export default function StrukturJobdescTab() {
   const [activeSubTab, setActiveSubTab] = useState('organogram'); // 'organogram' | 'jobdesc'
@@ -62,7 +62,7 @@ export default function StrukturJobdescTab() {
         <div className="text-center md:text-right">
           <div className="inline-flex items-center space-x-1.5 bg-genre-blue/10 text-genre-blue px-3 py-1 rounded-full text-xs font-bold mb-1">
             <ShieldCheck className="w-3.5 h-3.5" />
-            <span>Masa Bakti 2026/2027</span>
+            <span>Masa Bakti {KABINET.periode}</span>
           </div>
           <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
             Struktur Organisasi & Job Description
