@@ -351,7 +351,7 @@ export default function PortalProvider({
           )}
           {modal?.type === 'preview' && (
             <SuratPreviewModal
-              surat={modal.surat}
+              surat={data.suratList.find((row) => row.id === modal.surat.id) || modal.surat}
               busy={busy}
               onClose={closeModal}
               canApprove={canApproveOrConfirm(profile.level)}

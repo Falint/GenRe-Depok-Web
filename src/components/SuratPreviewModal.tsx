@@ -26,6 +26,10 @@ export default function SuratPreviewModal({
   busy?: boolean;
 }) {
   if (!surat) return null;
+  const fileUrl =
+    surat.file_pdf_url && URL.canParse(surat.file_pdf_url) ? new URL(surat.file_pdf_url) : null;
+  const resultUrl =
+    fileUrl?.protocol === 'https:' && !fileUrl.username && !fileUrl.password ? fileUrl.href : null;
 
   return (
     <Dialog title="Pratinjau surat" onClose={onClose} busy={busy}>
@@ -62,6 +66,46 @@ export default function SuratPreviewModal({
 
         {/* Official Letter Paper Layout (A4 Style) */}
         <div className="p-6 sm:p-10 bg-slate-100 max-h-[75vh] overflow-y-auto">
+          <section
+            aria-label="Riwayat dan hasil surat"
+            className="mb-4 max-w-2xl mx-auto rounded-2xl border border-slate-200 bg-white p-4 text-sm"
+          >
+            <details>
+              <summary className="cursor-pointer font-bold text-slate-900">
+                Riwayat Persetujuan
+              </summary>
+              {surat.approvalHistory.length === 0 ? (
+                <p className="mt-2 text-xs text-slate-500">Belum ada riwayat persetujuan.</p>
+              ) : (
+                <ol className="mt-2 space-y-2 text-xs text-slate-600">
+                  {surat.approvalHistory.map((step, index) => (
+                    <li key={index}>
+                      <p className="font-semibold text-slate-800">
+                        {step.step} · {step.status}
+                      </p>
+                      <p>
+                        {step.actor} · {step.time}
+                      </p>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </details>
+            {resultUrl ? (
+              <a
+                href={resultUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-3 inline-block rounded-xl bg-genre-blue px-3 py-2 text-xs font-bold text-white"
+              >
+                Buka Hasil Surat
+              </a>
+            ) : (
+              <p className="mt-3 text-xs text-slate-500">
+                File hasil surat belum tersedia. Pratinjau surat dapat dilihat di bawah.
+              </p>
+            )}
+          </section>
           <div className="bg-white shadow-md rounded-2xl p-6 sm:p-10 border border-slate-300 max-w-2xl mx-auto text-slate-800 text-xs sm:text-sm leading-relaxed">
             {/* Kop Surat Resmi dengan 4 Logo Otentik */}
             <div className="border-b-4 border-double border-slate-900 pb-4 mb-6">

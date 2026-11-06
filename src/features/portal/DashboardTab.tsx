@@ -2,6 +2,7 @@
 import { useNow } from '@/features/portal/useNow';
 import Calendar from './Calendar';
 import { attendanceOpen } from '@/features/portal/datetime';
+import { formatDate } from './mapping';
 import { usePortal } from '@/features/portal/PortalProvider';
 import React from 'react';
 import Image from 'next/image';
@@ -48,6 +49,7 @@ export default function DashboardTab() {
 
   // Compute pending metrics
   const pendingSurat = suratList.filter((s) => s.status.includes('Menunggu'));
+  const mySurat = suratList.filter((surat) => surat.pemohon_id === currentRole.userId);
   const pendingReimburse = reimburseList.filter((r) => r.status.includes('Menunggu'));
   const openTiket = tiketList.filter((t) => t.status !== 'Selesai');
 
@@ -484,6 +486,51 @@ export default function DashboardTab() {
           </button>
         </div>
       </div>
+
+      <section
+        aria-label="Pengajuan Surat Saya"
+        className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm"
+      >
+        <h2 className="font-extrabold text-sm sm:text-base text-slate-900">
+          Pengajuan Surat Saya ({mySurat.length})
+        </h2>
+        <p className="mt-1 text-xs text-slate-500">
+          Buka surat untuk melihat pratinjau, status, riwayat persetujuan, dan file hasil jika
+          tersedia.
+        </p>
+        {mySurat.length === 0 ? (
+          <p className="mt-4 text-sm text-slate-500">
+            Belum ada pengajuan surat. Gunakan tombol + Request Surat.
+          </p>
+        ) : (
+          <ul className="mt-4 max-h-96 overflow-y-auto divide-y divide-slate-100">
+            {mySurat.map((surat) => (
+              <li key={surat.id}>
+                <button
+                  type="button"
+                  onClick={() => onSelectSurat(surat)}
+                  className="w-full rounded-xl p-3 text-left hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-genre-blue"
+                >
+                  <span className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-bold text-sm text-slate-900 break-words">
+                      {surat.perihal}
+                    </span>
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-xs font-bold ${surat.status.includes('Selesai') ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}
+                    >
+                      {surat.status}
+                    </span>
+                  </span>
+                  <span className="mt-1 block break-all text-xs text-slate-500">{surat.nomor}</span>
+                  <span className="mt-1 block text-xs text-slate-500">
+                    Diajukan {formatDate(surat.created_at)} WIB · Lihat surat
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       {/* ================= KHUSUS PENGURUS INTI: DAFTAR SURAT MENUNGGU TINDAKAN & REALISASI ANGGARAN ================= */}
       {isFinanceAdmin && (
