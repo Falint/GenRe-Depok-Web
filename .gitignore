@@ -24,12 +24,12 @@ pnpm-debug.log*
 # ==========================================
 # Environment Variables & Rahasia
 # ==========================================
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env*
+!.env.example
 *.pem
+*.key
+*.p12
+*.pfx
 
 # ==========================================
 # Cache, Testing & Temporary Files
@@ -49,3 +49,9 @@ Thumbs.db
 .idea/
 *.swp
 *~
+
+# Next.js and local verification
+*.tsbuildinfo
+playwright-report/
+test-results/
+.vercel/

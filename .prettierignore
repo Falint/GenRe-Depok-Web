@@ -1,0 +1,8 @@
+node_modules
+.next
+dist
+package-lock.json
+next-env.d.ts
+.vercel
+AGENTS.md
+*.sql

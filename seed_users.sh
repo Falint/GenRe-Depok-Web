@@ -7,9 +7,10 @@
 #   2. Set environment variables:
 #      export SUPABASE_URL="https://YOUR_PROJECT.supabase.co"
 #      export SERVICE_ROLE_KEY="your-service-role-key"
-#   3. bash seed_users.sh
+#   3. Set SEED_INITIAL_PASSWORD (password sementara kuat, jangan simpan di Git)
+#   4. bash seed_users.sh
 #
-# Trigger on_auth_user_created akan otomatis buat row di profiles
+# Trigger membuat profil staff; service role mengisi jabatan dan level setelah akun dibuat.
 # =========================================================================
 
 set -euo pipefail
@@ -18,29 +19,36 @@ set -euo pipefail
 : "${SERVICE_ROLE_KEY:?Set SERVICE_ROLE_KEY dulu}"
 
 API="${SUPABASE_URL}/auth/v1/admin/users"
-PW="GenReDepok2026!"
+: "${SEED_INITIAL_PASSWORD:?Set SEED_INITIAL_PASSWORD dulu}"
+export SEED_INITIAL_PASSWORD
+umask 077
+seed_response=$(mktemp)
+trap 'rm -f -- "$seed_response"' EXIT
 
 create_user() {
   local email="$1" nama="$2" jabatan="$3" bidang="$4" kelompok="$5" level="$6"
 
   echo "Creating: ${email} (${nama})"
-  curl -s -o /dev/null -w "  -> HTTP %{http_code}\n" \
+  python3 - "$email" "$nama" <<'PYJSON' | curl --fail --silent --show-error --output "$seed_response" \
     -X POST "$API" \
     -H "apikey: ${SERVICE_ROLE_KEY}" \
     -H "Authorization: Bearer ${SERVICE_ROLE_KEY}" \
-    -H "Content-Type: application/json" \
-    -d "{
-      \"email\": \"${email}\",
-      \"password\": \"${PW}\",
-      \"email_confirm\": true,
-      \"user_metadata\": {
-        \"nama_lengkap\": \"${nama}\",
-        \"jabatan\": \"${jabatan}\",
-        \"bidang_divisi\": \"${bidang}\",
-        \"kelompok\": \"${kelompok}\",
-        \"level\": \"${level}\"
-      }
-    }"
+    -H "Content-Type: application/json" --data-binary @-
+import json, os, sys
+print(json.dumps({"email": sys.argv[1], "password": os.environ["SEED_INITIAL_PASSWORD"], "email_confirm": True, "user_metadata": {"nama_lengkap": sys.argv[2]}}))
+PYJSON
+  local user_id
+  user_id=$(python3 -c 'import json,sys,uuid; print(uuid.UUID(json.load(sys.stdin)["id"]))' < "$seed_response")
+  python3 - "$nama" "$jabatan" "$bidang" "$kelompok" "$level" <<'PYJSON' | curl --fail --silent --show-error --output "$seed_response" \
+    -X PATCH "${SUPABASE_URL}/rest/v1/profiles?id=eq.${user_id}" \
+    -H "apikey: ${SERVICE_ROLE_KEY}" \
+    -H "Authorization: Bearer ${SERVICE_ROLE_KEY}" \
+    -H "Content-Type: application/json" -H "Prefer: return=representation" --data-binary @-
+import json, sys
+print(json.dumps(dict(zip(["nama_lengkap", "jabatan", "bidang_divisi", "kelompok", "level"], sys.argv[1:]))))
+PYJSON
+  python3 -c 'import json,sys; rows=json.load(sys.stdin); sys.exit(0 if isinstance(rows,list) and len(rows)==1 else 1)' < "$seed_response"
+
 }
 
 echo "=== Seed 26 akun pengurus Forum GenRe Kota Depok ==="
@@ -86,5 +94,5 @@ create_user "faizah@genredepok.or.id"           "Siti Nur Faizah"              "
 
 echo ""
 echo "=== Selesai! 26 akun telah dibuat ==="
-echo "Semua password awal: ${PW}"
+echo "Gunakan password sementara dari SEED_INITIAL_PASSWORD; minta pengurus menggantinya setelah aktivasi."
 echo "Login di: ${SUPABASE_URL}"

@@ -1,9 +1,6 @@
 /** @type {import('tailwindcss').Config} */
-export default {
-  content: [
-    "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
-  ],
+const config = {
+  content: ['./src/**/*.{js,ts,jsx,tsx}'],
   theme: {
     extend: {
       colors: {
@@ -15,10 +12,12 @@ export default {
           'orange-dark': '#CC6800',
           'orange-light': '#FFF5EB',
           teal: '#00A896',
-          purple: '#6C5CE7'
-        }
-      }
+          purple: '#6C5CE7',
+        },
+      },
     },
   },
   plugins: [],
-}
+};
+
+export default config;

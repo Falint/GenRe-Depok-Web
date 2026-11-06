@@ -349,7 +349,7 @@ ON CONFLICT (bidang) DO NOTHING;
 --   -H "Content-Type: application/json" \
 --   -d '{
 --     "email": "ketua@genredepok.or.id",
---     "password": "GenReDepok2026!",
+--     "password": "<SET_SECURE_INITIAL_PASSWORD>",
 --     "email_confirm": true,
 --     "user_metadata": {
 --       "nama_lengkap": "Muhammad Ighasta Mughis",
@@ -363,7 +363,7 @@ ON CONFLICT (bidang) DO NOTHING;
 
 /*
 DAFTAR LENGKAP 26 AKUN (sesuai ROLES di mockData.js):
-Semua password awal: GenReDepok2026!
+Password awal ditetapkan lewat SEED_INITIAL_PASSWORD di luar Git.
 
 No | role_id                  | Nama                           | Jabatan                         | Email                              | Level
 ---|--------------------------|--------------------------------|---------------------------------|------------------------------------|------
