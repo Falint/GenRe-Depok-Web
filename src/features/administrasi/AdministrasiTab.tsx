@@ -1,4 +1,6 @@
 'use client';
+import ReimburseDecision from './ReimburseDecision';
+import { REIMBURSE_STATUS } from '@/features/portal/schema';
 import { formatDate } from '@/features/portal/mapping';
 import { usePortal } from '@/features/portal/PortalProvider';
 import React, { useState } from 'react';
@@ -21,6 +23,7 @@ import { canViewAdminFinance, canApproveOrConfirm } from '@/features/auth/permis
 
 export default function AdministrasiTab() {
   const {
+    budgetOptions,
     currentRole,
     suratList,
     reimburseList,
@@ -340,7 +343,7 @@ export default function AdministrasiTab() {
               >
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="font-mono text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded border border-emerald-100">
+                    <span className="break-all font-mono text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded border border-emerald-100">
                       {item.id}
                     </span>
                     <span
@@ -355,6 +358,30 @@ export default function AdministrasiTab() {
                   </div>
 
                   <h3 className="font-black text-base text-slate-900">{item.proker}</h3>
+                  <p className="text-xs text-slate-600">
+                    {budgetOptions
+                      .filter((b) => b.id === item.pagu_anggaran_id)
+                      .map((b) => `${b.bidang} (${b.tahun_anggaran})`)
+                      .join('') || 'Belum direkonsiliasi — tanpa pos anggaran'}
+                  </p>
+                  {keuangan.paguAnggaran.some(
+                    (b) => b.id === item.pagu_anggaran_id && b.sisa < 0,
+                  ) && (
+                    <p role="status" className="text-sm font-bold text-red-700">
+                      Peringatan: reservasi dan realisasi melebihi pagu.
+                    </p>
+                  )}
+                  <ul className="text-xs">
+                    {item.approvalChain.map((step, index) => (
+                      <li key={index}>
+                        {step.date} · {step.status} · {step.name}
+                        {step.reason && ` — ${step.reason}`}
+                      </li>
+                    ))}
+                  </ul>
+                  {item.status === REIMBURSE_STATUS.PENDING && (
+                    <ReimburseDecision id={item.id} decision="reject" />
+                  )}
 
                   <p className="text-xl font-black text-slate-900 font-mono mt-1 text-emerald-700">
                     Rp {item.nominal.toLocaleString('id-ID')}
@@ -394,7 +421,7 @@ export default function AdministrasiTab() {
                     {item.updated_at && ` · Diperbarui ${formatDate(item.updated_at)} WIB`}
                   </span>
 
-                  {canApproveFinance && !item.status.includes('Selesai') && (
+                  {canApproveFinance && item.status === REIMBURSE_STATUS.PENDING && (
                     <button
                       disabled={busy}
                       onClick={() => onApproveReimburse(item.id)}
@@ -539,6 +566,9 @@ export default function AdministrasiTab() {
                       <span>•</span>
                       <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-600 font-semibold">
                         {trx.kategori}
+                        {trx.jenis === 'Keluar' &&
+                          !trx.pagu_anggaran_id &&
+                          ' · Belum direkonsiliasi'}
                       </span>
                       {trx.sumberDana && (
                         <>

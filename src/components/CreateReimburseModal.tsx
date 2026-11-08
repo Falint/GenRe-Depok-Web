@@ -3,6 +3,7 @@ import type { CreateModalProps } from './modal-types';
 import type { ReimburseInput } from '@/features/portal/validation';
 import { driveFileUrl } from '@/features/portal/validation';
 import Dialog from './Dialog';
+import BudgetSelect from './BudgetSelect';
 import React, { useState } from 'react';
 import { X, Receipt, CreditCard, AlertCircle } from 'lucide-react';
 
@@ -13,6 +14,8 @@ export default function CreateReimburseModal({
   currentRole,
   busy,
 }: CreateModalProps<ReimburseInput>) {
+  const [requestId] = useState(() => crypto.randomUUID());
+  const [budgetId, setBudgetId] = useState('');
   const [formData, setFormData] = useState({
     proker: '',
     nominal: '',
@@ -41,6 +44,8 @@ export default function CreateReimburseModal({
     setProofError('');
     const nominalNumber = Number(formData.nominal);
     const newReimburse = {
+      request_id: requestId,
+      pagu_anggaran_id: budgetId,
       proker: formData.proker,
       nominal: nominalNumber,
       keterangan: formData.keterangan,
@@ -77,6 +82,7 @@ export default function CreateReimburseModal({
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4 text-xs sm:text-sm">
+          <BudgetSelect value={budgetId} onChange={setBudgetId} />
           <div>
             <label className="block font-bold text-slate-700 mb-1" htmlFor="createreimbursemodal-1">
               Nama Program Kerja / Kegiatan *

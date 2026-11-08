@@ -7,6 +7,7 @@ import {
 } from '@/features/auth/permissions';
 import { PortalError } from '@/lib/errors';
 import {
+  reimburseDecision,
   draftNumber,
   mutasiInput,
   parseInput,
@@ -53,19 +54,27 @@ export async function approveSurat(input: string) {
 }
 
 export async function addReimburse(input: ReimburseInput) {
-  return mutate('reimburse:create', async (client, profile) => {
-    const values = parseInput(reimburseInput, input);
-    const { error } = await client
-      .from('reimburse')
-      .insert({
-        ...values,
-        foto_struk_url: values.foto_struk_url || null,
-        pemohon_id: profile.id,
-        pemohon_nama: profile.nama_lengkap,
-        divisi: profile.kelompok,
-      })
-      .select('id')
-      .single();
+  return mutate('reimburse:create', async (client) => {
+    const { request_id, ...values } = parseInput(reimburseInput, input);
+    const { error } = await client.rpc('create_portal_reimburse', { request_id, input: values });
+    checkWrite(error);
+  });
+}
+
+export async function decideReimburse(input: {
+  id: string;
+  decision: 'cancel' | 'reject';
+  reason: string;
+}) {
+  return mutate('reimburse:decide', async (client, profile) => {
+    const values = parseInput(reimburseDecision, input);
+    if (values.decision === 'reject') requirePermission(isPengurusInti(profile.level));
+    // Ownership and pending state are checked under the RPC row lock.
+    const { error } = await client.rpc('decide_portal_reimburse', {
+      target_id: values.id,
+      decision: values.decision,
+      reason: values.reason,
+    });
     checkWrite(error);
   });
 }
@@ -87,17 +96,8 @@ export async function approveReimburse(input: string) {
 export async function addMutasi(input: MutasiInput) {
   return mutate('kas:create', async (client, profile) => {
     requirePermission(isPengurusInti(profile.level));
-    const { sumberDana, ...values } = parseInput(mutasiInput, input);
-    const { error } = await client
-      .from('kas_mutasi')
-      .insert({
-        ...values,
-        sumber_dana: sumberDana,
-        dicatat_oleh: profile.id,
-        dicatat_oleh_nama: profile.nama_lengkap,
-      })
-      .select('id')
-      .single();
+    const { request_id, ...values } = parseInput(mutasiInput, input);
+    const { error } = await client.rpc('create_portal_mutasi', { request_id, input: values });
     checkWrite(error);
   });
 }

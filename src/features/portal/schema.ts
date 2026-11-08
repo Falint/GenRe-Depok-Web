@@ -50,6 +50,7 @@ export const rowSchemas = {
   reimburse: z.object({
     ...id,
     ...requester,
+    pagu_anggaran_id: z.uuid().nullable().optional(),
     proker: z.string(),
     nominal: amount.positive(),
     keterangan: z.string().nullable(),
@@ -62,6 +63,7 @@ export const rowSchemas = {
   }),
   reimburse_approval: z.object({
     ...id,
+    reason: z.string().nullable().optional(),
     reimburse_id: z.uuid(),
     step_order: z.number().int(),
     role_label: z.string(),
@@ -71,6 +73,7 @@ export const rowSchemas = {
   }),
   kas_mutasi: z.object({
     ...id,
+    pagu_anggaran_id: z.uuid().nullable().optional(),
     tgl: z.string(),
     deskripsi: z.string(),
     jenis: z.enum(['Masuk', 'Keluar']),
@@ -143,5 +146,7 @@ export const SURAT_STATUS = {
 export const REIMBURSE_STATUS = {
   PENDING: 'Menunggu Approval Bendahara',
   COMPLETE: 'Selesai / Dicairkan',
+  CANCELLED: 'Dibatalkan',
+  REJECTED: 'Ditolak',
 } as const;
 export const TICKET_STATUS = { OPEN: 'Open', COMPLETE: 'Selesai' } as const;

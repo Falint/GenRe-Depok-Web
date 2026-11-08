@@ -2,6 +2,7 @@
 import type { CreateModalProps } from './modal-types';
 import type { MutasiInput } from '@/features/portal/validation';
 import Dialog from './Dialog';
+import BudgetSelect from './BudgetSelect';
 import React, { useState } from 'react';
 import { X, ArrowDownLeft, ArrowUpRight, Wallet, AlertCircle, CheckCircle2 } from 'lucide-react';
 
@@ -13,6 +14,8 @@ export default function MutasiKasModal({
   currentSaldo,
   busy,
 }: CreateModalProps<MutasiInput> & { currentSaldo: number }) {
+  const [requestId] = useState(() => crypto.randomUUID());
+  const [budgetId, setBudgetId] = useState('');
   const [jenis, setJenis] = useState<MutasiInput['jenis']>('Masuk'); // 'Masuk' | 'Keluar'
   const [nominal, setNominal] = useState('');
   const [kategori, setKategori] = useState('Iuran Kas Pengurus');
@@ -46,6 +49,8 @@ export default function MutasiKasModal({
     }
 
     const saved = await onSubmit({
+      request_id: requestId,
+      pagu_anggaran_id: jenis === 'Keluar' ? budgetId : null,
       deskripsi,
       jenis,
       nominal: nominalNum,
@@ -129,6 +134,7 @@ export default function MutasiKasModal({
             </div>
           </div>
 
+          {jenis === 'Keluar' && <BudgetSelect value={budgetId} onChange={setBudgetId} />}
           {/* Nominal Input */}
           <div>
             <label className="block font-bold text-slate-700 mb-1" htmlFor="mutasikasmodal-1">

@@ -47,6 +47,8 @@ export const driveFileUrl = z
   }, 'Gunakan link file Google Drive, bukan link folder.');
 export const reimburseInput = z
   .object({
+    request_id: z.uuid(),
+    pagu_anggaran_id: z.uuid(),
     proker: title,
     nominal: money,
     keterangan: note,
@@ -78,12 +80,20 @@ export const pengumumanInput = z
   .strict();
 export const mutasiInput = z
   .object({
+    request_id: z.uuid(),
+    pagu_anggaran_id: z.uuid().nullable(),
     deskripsi: text,
     jenis: z.enum(['Masuk', 'Keluar']),
     nominal: money,
     kategori: shortText,
     sumberDana: shortText,
   })
+  .strict()
+  .refine((value) =>
+    value.jenis === 'Keluar' ? value.pagu_anggaran_id !== null : value.pagu_anggaran_id === null,
+  );
+export const reimburseDecision = z
+  .object({ id: z.uuid(), decision: z.enum(['cancel', 'reject']), reason: text })
   .strict();
 export const replyInput = z.object({ id: z.uuid(), response: text }).strict();
 export const recordId = z.uuid();

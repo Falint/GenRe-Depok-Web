@@ -41,6 +41,7 @@ export function mapReimburse(row: Row<'reimburse'>, approvals: Row<'reimburse_ap
       .filter((item) => item.reimburse_id === row.id)
       .sort((a, b) => a.step_order - b.step_order)
       .map((item) => ({
+        reason: item.reason || null,
         role: item.role_label,
         name: item.actor_name,
         status: item.status,
@@ -97,6 +98,7 @@ export function mapFinance(
   mutations: Row<'kas_mutasi'>[],
   budgets: Row<'pagu_anggaran'>[],
   now = new Date(),
+  claims: Row<'reimburse'>[] = [],
 ) {
   const monthKey = (date: Date) =>
     new Intl.DateTimeFormat('en-CA', {
@@ -104,6 +106,7 @@ export function mapFinance(
       month: '2-digit',
       timeZone: 'Asia/Jakarta',
     }).format(date);
+  const paidClaims = new Set(mutations.map((item) => item.reimburse_id).filter(Boolean));
   const thisMonth = mutations.filter((item) => monthKey(new Date(item.tgl)) === monthKey(now));
   const sum = (items: Row<'kas_mutasi'>[], kind: Row<'kas_mutasi'>['jenis']) =>
     checkedSum(items.filter((item) => item.jenis === kind).map((item) => item.nominal));
@@ -113,10 +116,30 @@ export function mapFinance(
     pengeluaranBulanIni: sum(thisMonth, 'Keluar'),
     paguAnggaran: [...budgets]
       .sort((a, b) => a.bidang.localeCompare(b.bidang))
-      .map((item) => ({
-        ...item,
-        persentase: item.pagu ? Math.round((item.terpakai / item.pagu) * 1000) / 10 : 0,
-      })),
+      .map((item) => {
+        const reservasi = checkedSum(
+          claims
+            .filter(
+              (claim) =>
+                claim.pagu_anggaran_id === item.id &&
+                !paidClaims.has(claim.id) &&
+                (claim.status || REIMBURSE_STATUS.PENDING) === REIMBURSE_STATUS.PENDING,
+            )
+            .map((claim) => claim.nominal),
+        );
+        const realisasi = sum(
+          mutations.filter((row) => row.pagu_anggaran_id === item.id),
+          'Keluar',
+        );
+        const sisa = checkedSum([item.pagu, -reservasi, -realisasi]);
+        return {
+          ...item,
+          reservasi,
+          realisasi,
+          sisa,
+          persentase: item.pagu ? Math.round((realisasi / item.pagu) * 1000) / 10 : 0,
+        };
+      }),
     transaksiTerbaru: [...mutations]
       .sort((a, b) => b.tgl.localeCompare(a.tgl))
       .map((item) => ({ ...item, tgl: formatDate(item.tgl, true), sumberDana: item.sumber_dana })),
@@ -127,7 +150,9 @@ export type Reimburse = ReturnType<typeof mapReimburse>;
 export type Pengumuman = ReturnType<typeof mapPengumuman>;
 export type Tiket = ReturnType<typeof mapTiket>;
 export type Finance = ReturnType<typeof mapFinance>;
+export type BudgetOption = { id: string; bidang: string; tahun_anggaran: number };
 export type PortalData = {
+  budgetOptions: BudgetOption[];
   suratList: Surat[];
   reimburseList: Reimburse[];
   pengumumanList: Pengumuman[];
@@ -135,6 +160,7 @@ export type PortalData = {
   keuangan: Finance;
 };
 export const EMPTY_PORTAL_DATA: PortalData = {
+  budgetOptions: [],
   suratList: [],
   reimburseList: [],
   pengumumanList: [],

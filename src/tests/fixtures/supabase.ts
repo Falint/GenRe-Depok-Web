@@ -8,6 +8,7 @@ import type { Profile, RoleLevel } from '../../features/portal/schema';
 let userId = '00000000-0000-4000-8000-000000000001';
 let level: RoleLevel = 'inti';
 let failReads = false;
+let loseCreationResponse = false;
 let failFeatures = false;
 let field = 'branding';
 let placements: Record<string, Partial<Profile>> = {};
@@ -112,6 +113,7 @@ function mayReadRequest(r: Record<string, unknown>, member = false) {
 }
 function reset() {
   placements = {};
+  loseCreationResponse = false;
   rows = Object.fromEntries(
     [
       'surat',
@@ -131,6 +133,20 @@ function reset() {
       'content_history',
     ].map((table) => [table, []]),
   );
+  rows.pagu_anggaran = [
+    {
+      id: fixtureId(90),
+      bidang: 'Operasional',
+      tahun_anggaran: Number(
+        new Intl.DateTimeFormat('en', { year: 'numeric', timeZone: 'Asia/Jakarta' }).format(
+          new Date(),
+        ),
+      ),
+      pagu: 10000,
+      terpakai: 7000,
+      updated_at: null,
+    },
+  ];
   rows.divisi = [
     { id: 'reguler', nama: 'Program Reguler', bidang_id: 'eksternal' },
     { id: 'design', nama: 'Design', bidang_id: 'branding' },
@@ -224,6 +240,12 @@ createServer(async (request, response) => {
       };
       return send(response, 200, {});
     }
+    if (url.pathname === '/__test/lose-creation-response') {
+      loseCreationResponse = true;
+      return send(response, 200, {});
+    }
+    if (url.pathname === '/__test/finance-counts')
+      return send(response, 200, { claims: rows.reimburse.length, cash: rows.kas_mutasi.length });
     if (url.pathname === '/__test/actor') {
       userId = fixtureId(Number(url.searchParams.get('id') || '1'));
       level = z
@@ -260,6 +282,92 @@ createServer(async (request, response) => {
       const input = z.record(z.string(), z.unknown()).parse(v.input || {});
       const now = new Date().toISOString();
       const contentManager = level === 'inti' || field === 'branding';
+      if (name === 'list_portal_budgets')
+        return send(
+          response,
+          200,
+          rows.pagu_anggaran.map(({ id, bidang, tahun_anggaran }) => ({
+            id,
+            bidang,
+            tahun_anggaran,
+          })),
+        );
+      if (name === 'create_portal_reimburse' || name === 'create_portal_mutasi') {
+        const claim = name === 'create_portal_reimburse';
+        if (!claim && level !== 'inti') return send(response, 403, { code: '42501' });
+        const table = claim ? 'reimburse' : 'kas_mutasi';
+        const old = rows[table].find((row) => row.id === v.request_id);
+        if (old) {
+          if (old.request_payload !== JSON.stringify(input) || old.request_owner !== userId)
+            return send(response, 400, { code: '22023' });
+          return send(response, 200, null);
+        }
+        rows[table].push({
+          ...input,
+          id: v.request_id,
+          request_payload: JSON.stringify(input),
+          request_owner: userId,
+          created_at: now,
+          updated_at: now,
+          tanggal: now.slice(0, 10),
+          tgl: now.slice(0, 10),
+          pemohon_id: userId,
+          pemohon_nama: profile().nama_lengkap,
+          divisi: profile().kelompok,
+          status: 'Menunggu Approval Bendahara',
+          foto_struk_url: input.foto_struk_url || null,
+          bukti_transfer_url: null,
+          sumber_dana: input.sumberDana,
+          dicatat_oleh: userId,
+          dicatat_oleh_nama: profile().nama_lengkap,
+        });
+        if (loseCreationResponse) {
+          loseCreationResponse = false;
+          return send(response, 500, { code: 'fixture_response_lost' });
+        }
+        return send(response, 200, null);
+      }
+      if (name === 'decide_portal_reimburse' || name === 'disburse_portal_reimburse') {
+        const claim = rows.reimburse.find((row) => row.id === v.target_id);
+        if (!claim) return send(response, 404, {});
+        if (v.decision === 'cancel' ? claim.pemohon_id !== userId : level !== 'inti')
+          return send(response, 403, { code: '42501' });
+        if (claim.status !== 'Menunggu Approval Bendahara')
+          return send(response, 400, { code: '40001' });
+        const paid = name === 'disburse_portal_reimburse';
+        claim.status = paid
+          ? 'Selesai / Dicairkan'
+          : v.decision === 'cancel'
+            ? 'Dibatalkan'
+            : 'Ditolak';
+        rows.reimburse_approval.push({
+          id: randomUUID(),
+          reimburse_id: claim.id,
+          step_order: 99,
+          role_label: profile().jabatan,
+          actor_name: profile().nama_lengkap,
+          status: claim.status,
+          reason: v.reason || null,
+          acted_at: now,
+          created_at: now,
+        });
+        if (paid)
+          rows.kas_mutasi.push({
+            id: randomUUID(),
+            reimburse_id: claim.id,
+            pagu_anggaran_id: claim.pagu_anggaran_id,
+            nominal: claim.nominal,
+            jenis: 'Keluar',
+            deskripsi: `Pencairan Reimburse: ${claim.proker}`,
+            kategori: claim.divisi,
+            sumber_dana: 'Kas Utama',
+            dicatat_oleh: userId,
+            dicatat_oleh_nama: profile().nama_lengkap,
+            tgl: now.slice(0, 10),
+            created_at: now,
+          });
+        return send(response, 200, null);
+      }
       if (name === 'create_panitia_request') {
         if (level !== 'kadiv' || !division) return send(response, 403, { code: '42501' });
         if (!rows.panitia_requests.some((r) => r.id === v.request_id)) {
@@ -427,6 +535,13 @@ createServer(async (request, response) => {
       return send(response, 500, { code: 'fixture_error' });
     if (request.method === 'GET' || request.method === 'HEAD') {
       let results: Record<string, unknown>[] = table === 'profiles' ? directory() : rows[table];
+      if (table === 'reimburse' && level !== 'inti')
+        results = results.filter((r) => r.pemohon_id === userId);
+      if (table === 'reimburse_approval' && level !== 'inti')
+        results = results.filter((h) =>
+          rows.reimburse.some((r) => r.id === h.reimburse_id && r.pemohon_id === userId),
+        );
+      if (['kas_mutasi', 'pagu_anggaran'].includes(table) && level !== 'inti') results = [];
       if (table === 'panitia_requests') results = results.filter((r) => mayReadRequest(r, true));
       if (table === 'panitia_assignments')
         results = results.filter(

@@ -4,7 +4,9 @@ import Calendar from './Calendar';
 import { attendanceOpen } from '@/features/portal/datetime';
 import { formatDate } from './mapping';
 import { usePortal } from '@/features/portal/PortalProvider';
-import React from 'react';
+import React, { useState } from 'react';
+import ReimburseDecision from '@/features/administrasi/ReimburseDecision';
+import { REIMBURSE_STATUS } from './schema';
 import Image from 'next/image';
 import { KABINET } from '@/features/organisasi/content';
 import {
@@ -26,6 +28,9 @@ import { canViewAdminFinance, canApproveOrConfirm } from '@/features/auth/permis
 export default function DashboardTab() {
   const now = useNow();
   const {
+    budgetOptions,
+    dataError,
+    refreshData,
     currentRole,
     suratList,
     reimburseList,
@@ -41,6 +46,18 @@ export default function DashboardTab() {
     onConfirmRead,
     busy,
   } = usePortal();
+
+  const [budgetYear, setBudgetYear] = useState(() =>
+    new Intl.DateTimeFormat('en', { year: 'numeric', timeZone: 'Asia/Jakarta' }).format(new Date()),
+  );
+  const visibleBudgets = keuangan.paguAnggaran.filter(
+    (item) => String(item.tahun_anggaran) === budgetYear,
+  );
+  const budgetYears = [
+    ...new Set([budgetYear, ...keuangan.paguAnggaran.map((item) => String(item.tahun_anggaran))]),
+  ]
+    .sort()
+    .reverse();
 
   // RBAC Access Control
   const isFinanceAdmin = canViewAdminFinance(currentRole.level); // Ketua, Wakil, Sekretaris, Bendahara
@@ -61,6 +78,65 @@ export default function DashboardTab() {
 
   return (
     <div className="space-y-6 pb-20 md:pb-6">
+      <section
+        aria-labelledby="my-reimburse-heading"
+        className="bg-white rounded-3xl border border-slate-200 p-5 space-y-4"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 id="my-reimburse-heading" className="font-bold text-slate-900">
+            Reimburse Saya
+          </h2>
+          <button onClick={() => void refreshData()} className="text-sm text-genre-blue underline">
+            Refresh reimburse
+          </button>
+        </div>
+        {dataError && (
+          <p role="alert" className="text-sm text-red-700">
+            Reimburse gagal diperbarui. Data yang tampil mungkin belum terbaru.
+          </p>
+        )}
+        {!dataError && !reimburseList.some((item) => item.pemohon_id === currentRole.userId) && (
+          <p className="text-sm text-slate-500">Belum ada klaim reimburse.</p>
+        )}
+        <div className="grid gap-4 md:grid-cols-2">
+          {reimburseList
+            .filter((item) => item.pemohon_id === currentRole.userId)
+            .map((item) => {
+              const budget = budgetOptions.find((b) => b.id === item.pagu_anggaran_id);
+              return (
+                <article
+                  key={item.id}
+                  className="border rounded-2xl p-4 space-y-2 min-w-0 break-words"
+                >
+                  <h3 className="font-bold">{item.proker}</h3>
+                  <p className="text-sm">
+                    Rp {item.nominal.toLocaleString('id-ID')} · {item.tanggal}
+                  </p>
+                  <p className="text-sm font-semibold">{item.status}</p>
+                  <p className="text-xs text-slate-600">
+                    {budget
+                      ? `${budget.bidang} (${budget.tahun_anggaran})`
+                      : 'Belum direkonsiliasi — tanpa pos anggaran'}
+                  </p>
+                  <ul className="text-xs space-y-1">
+                    {item.approvalChain.map((step, index) => (
+                      <li key={index}>
+                        {step.date} · {step.status} · {step.name} ({step.role})
+                        {step.reason && ` — ${step.reason}`}
+                      </li>
+                    ))}
+                  </ul>
+                  {!item.approvalChain.length && (
+                    <p className="text-xs text-slate-500">Belum ada keputusan.</p>
+                  )}
+                  {item.status === REIMBURSE_STATUS.PENDING && (
+                    <ReimburseDecision id={item.id} decision="cancel" />
+                  )}
+                </article>
+              );
+            })}
+        </div>
+      </section>
       {/* Role Banner & Dynamic Greeting */}
       <div className="relative overflow-hidden rounded-3xl bg-primera-navy p-6 sm:p-8 text-white shadow-xl shadow-blue-900/10">
         <div className="mb-5 flex items-center gap-3 border-b border-primera-gold/30 pb-5">
@@ -611,7 +687,7 @@ export default function DashboardTab() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-bold text-slate-900 text-sm sm:text-base flex items-center">
                 <TrendingUp className="w-4 h-4 mr-2 text-emerald-600" />
-                Realisasi Anggaran per Bidang (2026)
+                Anggaran per Pos
               </h2>
               <button
                 onClick={() => onNavigateTab('administrasi')}
@@ -621,11 +697,24 @@ export default function DashboardTab() {
               </button>
             </div>
 
+            <label className="block text-sm mb-3">
+              Tahun anggaran{' '}
+              <select
+                aria-label="Tahun anggaran"
+                value={budgetYear}
+                onChange={(event) => setBudgetYear(event.target.value)}
+                className="border rounded p-1"
+              >
+                {budgetYears.map((year) => (
+                  <option key={year}>{year}</option>
+                ))}
+              </select>
+            </label>
             <div className="space-y-4">
-              {keuangan.paguAnggaran.length === 0 && (
+              {visibleBudgets.length === 0 && (
                 <p className="text-sm text-slate-500">Belum ada pagu anggaran.</p>
               )}
-              {keuangan.paguAnggaran.map((item, idx) => (
+              {visibleBudgets.map((item, idx) => (
                 <div key={idx} className="space-y-1.5">
                   <div className="flex justify-between text-xs font-bold text-slate-800">
                     <span>{item.bidang}</span>
@@ -637,9 +726,20 @@ export default function DashboardTab() {
                       style={{ width: `${Math.min(100, item.persentase)}%` }}
                     />
                   </div>
-                  <div className="flex justify-between text-[10px] text-slate-500 font-mono">
-                    <span>Terpakai: Rp {item.terpakai.toLocaleString('id-ID')}</span>
+                  <div className="flex flex-wrap gap-2 justify-between text-[10px] text-slate-500 font-mono">
+                    <span>
+                      Historis terpisah: Rp {item.terpakai.toLocaleString('id-ID')} (belum
+                      direkonsiliasi)
+                    </span>
+                    {item.sisa < 0 && (
+                      <span role="status" className="text-red-700 font-bold">
+                        Peringatan: melebihi pagu
+                      </span>
+                    )}
+                    <span>Realisasi: Rp {item.realisasi.toLocaleString('id-ID')}</span>
                     <span>Pagu: Rp {item.pagu.toLocaleString('id-ID')}</span>
+                    <span>Reservasi: Rp {item.reservasi.toLocaleString('id-ID')}</span>
+                    <span>Sisa: Rp {item.sisa.toLocaleString('id-ID')}</span>
                   </div>
                 </div>
               ))}

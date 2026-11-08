@@ -70,6 +70,10 @@ Browser Supabase hanya menangani sesi cookie dan subscription Realtime. Token ti
 
 `database.types.ts` diturunkan dari SQL repository, bukan hasil introspeksi database live. Cocokkan schema staging sebelum rollout. Tidak ada route atau client untuk WhatsApp, webhook, atau automation karena belum ada integrasi existing yang memerlukannya. Integrasi mendatang ditempatkan pada modul server dengan validasi input dan kredensial server; jangan memasukkan key provider ke `NEXT_PUBLIC_*`.
 
+## Pembaruan finance lokal (8 November 2026)
+
+Reimburse Saya, pembatalan/penolakan beralasan, retry idempotent, serta anggaran berdasarkan reservasi dan ledger sudah disiapkan di kode lokal. Pagu historis `terpakai` tampil terpisah; data tanpa pos tidak direkonsiliasi otomatis. Fitur ini membutuhkan tiga migration 20261108 yang **belum diterapkan agent**. Pemilik menjalankannya bertahap melalui SQL Editor development sesuai [panduan rollout finance](docs/FINANCE_ROLLOUT.md). Catatan status sebelumnya di bawah merupakan riwayat; snapshot metadata terbaru tersedia pada AGENTS.md.
+
 ## Supabase dan status database
 
 `supabase_setup.sql` adalah setup baseline proyek, bukan migration runner otomatis. Jangan menjalankannya ulang pada database existing. Aplikasi tidak menerapkan SQL atau menjalankan seed saat install, build, test E2E, maupun startup.

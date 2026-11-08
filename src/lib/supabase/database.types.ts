@@ -62,6 +62,22 @@ export type Database = {
     };
     Views: { [_ in never]: never };
     Functions: {
+      list_portal_budgets: {
+        Args: Record<string, never>;
+        Returns: { id: string; bidang: string; tahun_anggaran: number }[];
+      };
+      create_portal_reimburse: {
+        Args: { request_id: string; input: Record<string, unknown> };
+        Returns: undefined;
+      };
+      create_portal_mutasi: {
+        Args: { request_id: string; input: Record<string, unknown> };
+        Returns: undefined;
+      };
+      decide_portal_reimburse: {
+        Args: { target_id: string; decision: string; reason: string };
+        Returns: undefined;
+      };
       create_panitia_request: {
         Args: { request_id: string; input: Record<string, unknown> };
         Returns: undefined;

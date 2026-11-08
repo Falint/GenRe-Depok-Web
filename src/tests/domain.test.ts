@@ -84,6 +84,8 @@ test('money rejects zero, negative, fractional, infinite and unsafe amounts', ()
   for (const nominal of [0, -1, 1.5, Infinity, NaN, Number.MAX_SAFE_INTEGER + 1]) {
     assert.equal(
       reimburseInput.safeParse({
+        request_id: id,
+        pagu_anggaran_id: id,
         proker: 'Proker',
         nominal,
         keterangan: '',
@@ -94,6 +96,8 @@ test('money rejects zero, negative, fractional, infinite and unsafe amounts', ()
     );
     assert.equal(
       mutasiInput.safeParse({
+        request_id: id,
+        pagu_anggaran_id: null,
         nominal,
         jenis: 'Masuk',
         deskripsi: 'Kas',
@@ -128,6 +132,8 @@ test('server input rejects forged identity, whitespace and excessive content', (
 });
 test('reimburse accepts optional Drive file links and rejects unsafe or folder URLs', () => {
   const input = {
+    request_id: '00000000-0000-4000-8000-000000000090',
+    pagu_anggaran_id: '00000000-0000-4000-8000-000000000091',
     proker: 'Proker',
     nominal: 25000,
     keterangan: '',
@@ -330,4 +336,61 @@ test('only current staff in the destination division can receive a new assignmen
   assert.equal(canAssignMember({ level: 'staff', divisi_id: 'video' }, 'design'), false);
   assert.equal(canAssignMember({ level: 'kadiv', divisi_id: 'design' }, 'design'), false);
   assert.equal(canAssignMember({ level: 'staff', divisi_id: null }, null), false);
+});
+
+test('budget totals reserve pending claims, realize linked cash and exclude historical totals', () => {
+  const budget: Row<'pagu_anggaran'> = {
+    id,
+    bidang: 'Pos',
+    pagu: 100,
+    terpakai: 90,
+    tahun_anggaran: 2026,
+    updated_at: null,
+  };
+  const claim: Row<'reimburse'> = {
+    id,
+    pagu_anggaran_id: id,
+    proker: 'Proker',
+    nominal: 120,
+    keterangan: null,
+    bank: 'Bank',
+    rekening: '1',
+    pemohon_id: id,
+    pemohon_nama: 'Nama',
+    divisi: 'Bidang',
+    status: 'Menunggu Approval Bendahara',
+    tanggal: '2026-12-31',
+    created_at: null,
+    foto_struk_url: null,
+    bukti_transfer_url: null,
+  };
+  const totals = (claims: Row<'reimburse'>[], cash: Row<'kas_mutasi'>[] = []) =>
+    mapFinance(cash, [budget], new Date('2027-01-01'), claims).paguAnggaran[0];
+  assert.deepEqual(
+    [totals([claim]).reservasi, totals([claim]).realisasi, totals([claim]).sisa],
+    [120, 0, -20],
+  );
+  for (const status of ['Dibatalkan', 'Ditolak'])
+    assert.equal(totals([{ ...claim, status }]).reservasi, 0);
+  const ledger = {
+    ...mutation('2027-01-01', 120, 'Keluar'),
+    pagu_anggaran_id: id,
+    reimburse_id: id,
+  };
+  const paid = totals([{ ...claim, status: 'Selesai / Dicairkan' }], [ledger]);
+  assert.deepEqual(
+    [paid.reservasi, paid.realisasi, paid.sisa, paid.terpakai, paid.tahun_anggaran],
+    [0, 120, -20, 90, 2026],
+  );
+  assert.equal(
+    totals([claim], [ledger]).reservasi,
+    0,
+    'mixed read snapshots must not count the same claim twice',
+  );
+  const historical = totals(
+    [{ ...claim, pagu_anggaran_id: null }],
+    [mutation('2027-01-01', 50, 'Keluar')],
+  );
+  assert.deepEqual([historical.reservasi, historical.realisasi, historical.sisa], [0, 0, 100]);
+  assert.equal(totals([], [{ ...ledger, reimburse_id: null, nominal: 30 }]).realisasi, 30);
 });

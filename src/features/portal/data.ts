@@ -45,6 +45,7 @@ export async function loadPortalData(profile: Profile) {
     tickets,
     mutations,
     budgets,
+    budgetResult,
   ] = await Promise.all([
     readRows(client, 'surat', rowSchemas.surat),
     readRows(client, 'surat_approval', rowSchemas.surat_approval),
@@ -67,7 +68,13 @@ export async function loadPortalData(profile: Profile) {
     readRows(client, 'tiket_info', rowSchemas.tiket_info),
     profile.level === 'inti' ? readRows(client, 'kas_mutasi', rowSchemas.kas_mutasi) : [],
     profile.level === 'inti' ? readRows(client, 'pagu_anggaran', rowSchemas.pagu_anggaran) : [],
+    client.rpc('list_portal_budgets'),
   ]);
+  if (budgetResult.error)
+    throw new PortalError('Pilihan anggaran gagal dimuat. Muat ulang atau hubungi administrator.');
+  const budgetOptions = z
+    .array(rowSchemas.pagu_anggaran.pick({ id: true, bidang: true, tahun_anggaran: true }))
+    .parse(budgetResult.data);
   const newestFirst = <T extends { created_at: string | null }>(rows: T[]) =>
     [...rows].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
   return {
@@ -77,6 +84,7 @@ export async function loadPortalData(profile: Profile) {
       mapPengumuman(row, attendance, profiles),
     ),
     tiketList: newestFirst(tickets).map(mapTiket),
-    keuangan: mapFinance(mutations, budgets),
+    budgetOptions,
+    keuangan: mapFinance(mutations, budgets, new Date(), reimburse),
   };
 }

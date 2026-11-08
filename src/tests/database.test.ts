@@ -648,3 +648,350 @@ test('new feature tables and functions deny anonymous writes; announcements cann
     '1',
   );
 });
+
+const financeInput = (extra: Record<string, unknown> = {}) =>
+  JSON.stringify({
+    proker: 'Kegiatan anggaran',
+    nominal: 25000,
+    keterangan: '',
+    bank: 'BCA',
+    rekening: '123',
+    pagu_anggaran_id: id(90),
+    ...extra,
+  });
+const cashInput = (extra: Record<string, unknown> = {}) =>
+  JSON.stringify({
+    deskripsi: 'Kas manual',
+    jenis: 'Keluar',
+    nominal: 10000,
+    kategori: 'Operasional',
+    sumberDana: 'Kas',
+    pagu_anggaran_id: id(90),
+    ...extra,
+  });
+const concurrentSql = (statement: string) =>
+  new Promise<boolean>((resolve, reject) => {
+    const child = spawn('psql', args, { stdio: ['pipe', 'ignore', 'pipe'] });
+    child.on('error', reject);
+    child.on('close', (code) => resolve(code === 0));
+    child.stdin.end(statement);
+  });
+
+test('finance migrations preserve historical rows, revoke truncate and direct insert, and publish budgets', () => {
+  const before = sql('SELECT row_to_json(r) FROM public.reimburse r ORDER BY id');
+  const legacyBudget = sql('SELECT row_to_json(b) FROM public.pagu_anggaran b ORDER BY id');
+  for (const file of [
+    '202611080001_revoke_truncate.sql',
+    '202611080002_finance_budget.sql',
+    '202611080003_finance_rpc_only.sql',
+  ]) {
+    sql(readFileSync(`supabase/migrations/${file}`, 'utf8'));
+    sql(readFileSync(`supabase/migrations/${file}`, 'utf8'));
+  }
+  assert.equal(
+    sql("SELECT (to_jsonb(r) - 'pagu_anggaran_id')::json FROM public.reimburse r ORDER BY id")
+      .split('\n')
+      .map((line) => JSON.stringify(JSON.parse(line))).length,
+    before.split('\n').length,
+  );
+  const prior = before.split('\n').map((line) => JSON.parse(line));
+  const after = sql('SELECT row_to_json(r) FROM public.reimburse r ORDER BY id')
+    .split('\n')
+    .map((line) => JSON.parse(line));
+  assert.deepEqual(
+    after.map(({ pagu_anggaran_id, ...row }) => {
+      assert.equal(pagu_anggaran_id, null);
+      return row;
+    }),
+    prior,
+  );
+  assert.equal(sql('SELECT row_to_json(b) FROM public.pagu_anggaran b ORDER BY id'), legacyBudget);
+  for (const table of [
+    'profiles',
+    'surat',
+    'surat_approval',
+    'reimburse',
+    'reimburse_approval',
+    'kas_mutasi',
+    'pagu_anggaran',
+    'tiket_info',
+  ]) {
+    for (const role of ['anon', 'authenticated']) {
+      assert.equal(
+        sql(`SELECT has_table_privilege('${role}', 'public.${table}', 'TRUNCATE')`),
+        'f',
+      );
+      assert.throws(
+        () => sql(`SET ROLE ${role}; TRUNCATE public.${table} CASCADE`),
+        /permission denied/,
+      );
+    }
+  }
+  assert.throws(
+    () =>
+      sql(
+        asUser(
+          4,
+          "INSERT INTO public.reimburse(proker,pemohon_nama,divisi,nominal,bank,rekening) VALUES ('x','x','x',1,'x','x')",
+        ),
+      ),
+    /permission denied/,
+  );
+  assert.throws(
+    () =>
+      sql(
+        asUser(
+          1,
+          "INSERT INTO public.kas_mutasi(deskripsi,jenis,nominal,kategori,sumber_dana,dicatat_oleh_nama) VALUES ('x','Masuk',1,'x','x','x')",
+        ),
+      ),
+    /permission denied/,
+  );
+  assert.equal(
+    sql(
+      "SELECT count(*) FROM pg_publication_tables WHERE pubname='supabase_realtime' AND tablename='pagu_anggaran'",
+    ),
+    '1',
+  );
+  sql(
+    `INSERT INTO public.pagu_anggaran(id,bidang,pagu,terpakai,tahun_anggaran) VALUES ('${id(90)}','Pos Uji',10000,7000,extract(year FROM now() AT TIME ZONE 'Asia/Jakarta')), ('${id(91)}','Pos Uji',10000,0,2000)`,
+  );
+  assert.equal(sql(asUser(4, 'SELECT count(*) FROM public.pagu_anggaran')).split('\n').at(-1), '0');
+  assert.equal(
+    sql(asUser(4, `SELECT count(*) FROM public.list_portal_budgets() WHERE id='${id(90)}'`))
+      .split('\n')
+      .at(-1),
+    '1',
+  );
+  assert.throws(
+    () => sql('SET ROLE anon; SELECT public.list_portal_budgets()'),
+    /permission denied/,
+  );
+});
+
+test('creation retries, concurrency, changed payload and owners use one immutable submission', async () => {
+  const statement = asUser(
+    4,
+    `SELECT public.create_portal_reimburse('${id(100)}','${financeInput()}')`,
+  );
+  assert.deepEqual(
+    await Promise.all([
+      concurrentSql(statement),
+      concurrentSql(statement),
+      concurrentSql(statement),
+    ]),
+    [true, true, true],
+  );
+  sql(statement); // first response may have been lost after commit
+  assert.equal(sql(`SELECT count(*) FROM public.reimburse WHERE id='${id(100)}'`), '1');
+  assert.throws(
+    () =>
+      sql(
+        asUser(
+          4,
+          `SELECT public.create_portal_reimburse('${id(100)}','${financeInput({ nominal: 1 })}')`,
+        ),
+      ),
+    /Pengajuan berubah/,
+  );
+  assert.throws(
+    () => sql(asUser(3, `SELECT public.create_portal_reimburse('${id(100)}','${financeInput()}')`)),
+    /Pengajuan berubah/,
+  );
+  for (const actor of [2, 3])
+    assert.equal(
+      sql(asUser(actor, `SELECT count(*) FROM public.reimburse WHERE id='${id(100)}'`))
+        .split('\n')
+        .at(-1),
+      '0',
+    );
+  assert.equal(
+    sql(asUser(4, `SELECT count(*) FROM public.reimburse WHERE id='${id(100)}'`))
+      .split('\n')
+      .at(-1),
+    '1',
+  );
+  sql(`UPDATE public.profiles SET nama_lengkap='Nama berubah' WHERE id='${id(4)}'`);
+  sql(statement);
+  sql(asUser(1, `SELECT public.disburse_portal_reimburse('${id(100)}')`));
+  sql(`UPDATE public.pagu_anggaran SET tahun_anggaran=1999 WHERE id='${id(90)}'`);
+  sql(statement); // retry still matches after payment and year rollover
+  assert.throws(
+    () => sql(asUser(4, `SELECT public.create_portal_reimburse('${id(101)}','${financeInput()}')`)),
+    /Pos tahun berjalan/,
+  );
+  sql(
+    `UPDATE public.pagu_anggaran SET tahun_anggaran=extract(year FROM now() AT TIME ZONE 'Asia/Jakarta') WHERE id='${id(90)}'`,
+  );
+  const cash = asUser(1, `SELECT public.create_portal_mutasi('${id(110)}','${cashInput()}')`);
+  assert.deepEqual(
+    await Promise.all([concurrentSql(cash), concurrentSql(cash), concurrentSql(cash)]),
+    [true, true, true],
+  );
+  sql(cash);
+  assert.equal(sql(`SELECT count(*) FROM public.kas_mutasi WHERE id='${id(110)}'`), '1');
+  assert.throws(
+    () =>
+      sql(
+        asUser(
+          1,
+          `SELECT public.create_portal_mutasi('${id(110)}','${cashInput({ nominal: 20000 })}')`,
+        ),
+      ),
+    /Pengajuan berubah/,
+  );
+  assert.throws(
+    () => sql(asUser(4, `SELECT public.create_portal_mutasi('${id(111)}','${cashInput()}')`)),
+    /Permission denied/,
+  );
+  sql(
+    asUser(
+      1,
+      `SELECT public.create_portal_mutasi('${id(112)}','${cashInput({ jenis: 'Masuk', pagu_anggaran_id: null })}')`,
+    ),
+  );
+  for (const input of [
+    cashInput({ pagu_anggaran_id: null }),
+    cashInput({ jenis: 'Masuk' }),
+    cashInput({ nominal: 1.5 }),
+    cashInput({ nominal: null }),
+  ])
+    assert.throws(
+      () => sql(asUser(1, `SELECT public.create_portal_mutasi('${id(113)}','${input}')`)),
+      /Invalid/,
+    );
+});
+
+test('reservations, paid ledger and decisions remain atomic and over-budget claims are accepted', async () => {
+  for (const n of [120, 121, 122, 123])
+    sql(asUser(4, `SELECT public.create_portal_reimburse('${id(n)}','${financeInput()}')`));
+  const reserved = () =>
+    sql(
+      `SELECT coalesce(sum(nominal),0) FROM public.reimburse WHERE pagu_anggaran_id='${id(90)}' AND status='Menunggu Approval Bendahara'`,
+    );
+  assert.equal(reserved(), '100000');
+  assert.throws(
+    () =>
+      sql(
+        asUser(3, `SELECT public.decide_portal_reimburse('${id(120)}','cancel','Bukan pemilik')`),
+      ),
+    /Permission denied/,
+  );
+  assert.throws(
+    () =>
+      sql(asUser(4, `SELECT public.decide_portal_reimburse('${id(120)}','reject','Bukan inti')`)),
+    /Permission denied/,
+  );
+  assert.throws(
+    () => sql(asUser(4, `SELECT public.decide_portal_reimburse('${id(120)}','cancel',' ')`)),
+    /Alasan/,
+  );
+  sql(asUser(4, `SELECT public.decide_portal_reimburse('${id(120)}','cancel','Kegiatan batal')`));
+  sql(asUser(1, `SELECT public.decide_portal_reimburse('${id(121)}','reject','Bukti kurang')`));
+  assert.equal(reserved(), '50000');
+  sql(
+    `CREATE FUNCTION public.reject_finance_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'Audit failure'; END; $$; CREATE TRIGGER reject_finance BEFORE INSERT ON public.reimburse_approval FOR EACH ROW EXECUTE FUNCTION public.reject_finance_audit()`,
+  );
+  try {
+    assert.throws(
+      () =>
+        sql(
+          asUser(1, `SELECT public.decide_portal_reimburse('${id(122)}','reject','Uji rollback')`),
+        ),
+      /Audit failure/,
+    );
+    assert.throws(
+      () => sql(asUser(1, `SELECT public.disburse_portal_reimburse('${id(122)}')`)),
+      /Audit failure/,
+    );
+    assert.equal(reserved(), '50000');
+    assert.equal(
+      sql(`SELECT count(*) FROM public.kas_mutasi WHERE reimburse_id='${id(122)}'`),
+      '0',
+    );
+  } finally {
+    sql(
+      'DROP TRIGGER reject_finance ON public.reimburse_approval; DROP FUNCTION public.reject_finance_audit()',
+    );
+  }
+  const results = await Promise.all([
+    concurrentSql(asUser(1, `SELECT public.disburse_portal_reimburse('${id(122)}')`)),
+    concurrentSql(
+      asUser(1, `SELECT public.decide_portal_reimburse('${id(122)}','reject','Ditolak')`),
+    ),
+    concurrentSql(
+      asUser(4, `SELECT public.decide_portal_reimburse('${id(122)}','cancel','Dibatalkan')`),
+    ),
+  ]);
+  assert.equal(results.filter(Boolean).length, 1);
+  assert.equal(
+    sql(`SELECT count(*) FROM public.reimburse_approval WHERE reimburse_id='${id(122)}'`),
+    '1',
+  );
+  assert.equal(reserved(), '25000');
+  // A prior-year claim retains its allocation; cash uses the actual server date.
+  sql(
+    `UPDATE public.reimburse SET pagu_anggaran_id='${id(91)}',tanggal='2000-12-31',created_at='2000-12-31T12:00:00Z' WHERE id='${id(123)}'`,
+  );
+  sql(asUser(1, `SELECT public.disburse_portal_reimburse('${id(123)}')`));
+  assert.equal(
+    sql(
+      `SELECT pagu_anggaran_id='${id(91)}' AND tgl=(now() AT TIME ZONE 'Asia/Jakarta')::date FROM public.kas_mutasi WHERE reimburse_id='${id(123)}'`,
+    ),
+    't',
+  );
+  assert.equal(reserved(), '0');
+  assert.equal(sql(`SELECT terpakai FROM public.pagu_anggaran WHERE id='${id(90)}'`), '7000');
+  assert.throws(
+    () => sql(asUser(1, `SELECT public.disburse_portal_reimburse('${id(120)}')`)),
+    /Invalid claim status/,
+  );
+});
+
+test('December submission paid in January keeps original budget, cash date and retry identity', () => {
+  const createDefinition = sql(
+    "SELECT pg_get_functiondef('public.create_portal_reimburse(uuid,jsonb)'::regprocedure)",
+  );
+  const payDefinition = sql(
+    "SELECT pg_get_functiondef('public.disburse_portal_reimburse(uuid)'::regprocedure)",
+  );
+  const cashDefinition = sql(
+    "SELECT pg_get_functiondef('public.create_portal_mutasi(uuid,jsonb)'::regprocedure)",
+  );
+  const withClock = (definition: string, instant: string) =>
+    definition.replaceAll('now()', `timestamptz '${instant}'`);
+  sql(
+    `INSERT INTO public.pagu_anggaran(id,bidang,pagu,tahun_anggaran) VALUES ('${id(150)}','Desember',10000,2026)`,
+  );
+  const input = financeInput({ pagu_anggaran_id: id(150) });
+  const cash = cashInput({ pagu_anggaran_id: id(150) });
+  try {
+    // Override only the clock in temporary test-cluster functions, never the live database.
+    sql(withClock(createDefinition, '2026-12-31T16:59:59Z'));
+    sql(withClock(cashDefinition, '2026-12-31T16:59:59Z'));
+    sql(asUser(4, `SELECT public.create_portal_reimburse('${id(151)}','${input}')`));
+    sql(asUser(1, `SELECT public.create_portal_mutasi('${id(152)}','${cash}')`));
+    sql(withClock(payDefinition, '2026-12-31T17:00:01Z'));
+    sql(withClock(createDefinition, '2026-12-31T17:00:01Z'));
+    sql(withClock(cashDefinition, '2026-12-31T17:00:01Z'));
+    sql(asUser(1, `SELECT public.disburse_portal_reimburse('${id(151)}')`));
+    sql(asUser(4, `SELECT public.create_portal_reimburse('${id(151)}','${input}')`));
+    sql(asUser(1, `SELECT public.create_portal_mutasi('${id(152)}','${cash}')`));
+    assert.equal(sql(`SELECT tanggal FROM public.reimburse WHERE id='${id(151)}'`), '2026-12-31');
+    assert.equal(
+      sql(
+        `SELECT pagu_anggaran_id='${id(150)}' AND tgl='2027-01-01'::date FROM public.kas_mutasi WHERE reimburse_id='${id(151)}'`,
+      ),
+      't',
+    );
+    assert.equal(sql(`SELECT tgl FROM public.kas_mutasi WHERE id='${id(152)}'`), '2026-12-31');
+    assert.throws(
+      () => sql(asUser(4, `SELECT public.create_portal_reimburse('${id(153)}','${input}')`)),
+      /Pos tahun berjalan/,
+    );
+  } finally {
+    sql(createDefinition);
+    sql(payDefinition);
+    sql(cashDefinition);
+  }
+});

@@ -36,7 +36,9 @@ import type {
   TiketInput,
 } from './validation';
 import { refreshPortal } from './actions';
+import { createRefreshQueue, createRealtimeRefresh } from './refreshQueue';
 import {
+  decideReimburse,
   addMutasi,
   addReimburse,
   addSurat,
@@ -60,6 +62,13 @@ type Modal =
   | null;
 type PortalContextValue = PortalData & {
   currentRole: CurrentRole;
+  dataError: string;
+  refreshData: () => Promise<void>;
+  onDecideReimburse: (
+    id: string,
+    decision: 'cancel' | 'reject',
+    reason: string,
+  ) => Promise<boolean>;
   busy: boolean;
   runMutation: (work: () => Promise<Result>, message: string) => Promise<boolean>;
   onOpenCreateSurat: (event?: MouseEvent<HTMLElement>) => void;
@@ -99,7 +108,6 @@ export default function PortalProvider({
   const [toast, setToast] = useState<{ message: string; error: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
   const mutating = useRef(false);
-  const refreshing = useRef<Promise<void> | null>(null);
   const mounted = useRef(true);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showToast = (message: string, error = false) => {
@@ -107,30 +115,34 @@ export default function PortalProvider({
     setToast({ message, error });
     toastTimer.current = setTimeout(() => setToast(null), PORTAL_CONFIG.TOAST_DURATION_MS);
   };
+  const refreshQueue = useRef<ReturnType<typeof createRefreshQueue> | null>(null);
   const refreshData = useCallback(() => {
-    if (refreshing.current) return refreshing.current;
-    refreshing.current = (async () => {
-      try {
-        const result = await refreshPortal();
-        if (mounted.current) {
+    refreshQueue.current ??= createRefreshQueue(
+      async () => {
+        try {
+          const result = await refreshPortal();
+          if (!mounted.current) return;
           if (result.ok) {
             setData(result.data);
             setDataError('');
           } else setDataError(result.error);
+        } catch {
+          if (mounted.current)
+            setDataError('Koneksi terputus. Muat ulang data sebelum mencoba lagi.');
         }
-      } catch {
-        if (mounted.current)
-          setDataError('Koneksi terputus. Muat ulang data sebelum mencoba lagi.');
-      } finally {
-        refreshing.current = null;
-      }
-    })();
-    return refreshing.current;
+      },
+      () => mounted.current,
+    );
+    return refreshQueue.current();
   }, []);
   useEffect(() => {
     mounted.current = true;
     const client = createClient();
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    const realtime = createRealtimeRefresh(
+      () => void refreshData(),
+      () => router.refresh(),
+      PORTAL_CONFIG.REALTIME_DEBOUNCE_MS,
+    );
     const channel = client.channel(`portal:${profile.id}`);
     const tables = [
       'surat',
@@ -146,15 +158,11 @@ export default function PortalProvider({
     ];
     tables.forEach((table) =>
       channel.on('postgres_changes', { event: '*', schema: 'public', table }, () => {
-        clearTimeout(timer);
-        timer = setTimeout(() => {
-          void refreshData();
-          if (table === 'profiles') router.refresh();
-        }, PORTAL_CONFIG.REALTIME_DEBOUNCE_MS);
+        realtime.event(table);
       }),
     );
     channel.subscribe((status) => {
-      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT')
+      if (mounted.current && (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT'))
         setDataError(
           (previous) => previous || 'Pembaruan langsung terputus. Gunakan Muat ulang data.',
         );
@@ -173,7 +181,7 @@ export default function PortalProvider({
     });
     return () => {
       mounted.current = false;
-      clearTimeout(timer);
+      realtime.dispose();
       if (toastTimer.current) clearTimeout(toastTimer.current);
       authListener.subscription.unsubscribe();
       void client.removeChannel(channel);
@@ -194,7 +202,10 @@ export default function PortalProvider({
       showToast(message);
       return true;
     } catch {
-      showToast('Koneksi terputus. Muat ulang sebelum mengulang pengajuan.', true);
+      showToast(
+        'Koneksi terputus. Ulangi pengajuan dari form yang sama tanpa mengubah isian.',
+        true,
+      );
       return false;
     } finally {
       mutating.current = false;
@@ -212,6 +223,10 @@ export default function PortalProvider({
   };
   const context: PortalContextValue = {
     ...data,
+    dataError,
+    refreshData,
+    onDecideReimburse: (id, decision, reason) =>
+      runMutation(() => decideReimburse({ id, decision, reason }), 'Keputusan klaim tersimpan.'),
     currentRole,
     busy,
     runMutation,

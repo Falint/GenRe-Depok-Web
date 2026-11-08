@@ -132,6 +132,9 @@ test('reimburse, cash, broadcast and ticket forms persist through server operati
   await page.getByRole('button', { name: '+ Request Reimburse' }).click();
   await page.getByLabel('Nama Program Kerja / Kegiatan').fill('Proker Uji');
   await page.getByLabel('Nominal Pengeluaran').fill('25000');
+  await page
+    .getByLabel('Pos anggaran tahun berjalan')
+    .selectOption({ label: `Operasional (${new Date().getFullYear()})` });
   await page.getByLabel('Nomor Rekening').fill('12345');
   await page.getByRole('button', { name: 'Kirim Klaim Reimburse' }).click();
   await expect(page.getByRole('dialog')).not.toBeVisible();
@@ -140,9 +143,7 @@ test('reimburse, cash, broadcast and ticket forms persist through server operati
   await expect(page.getByRole('heading', { name: 'Proker Uji' })).toBeVisible();
   await expect(page.getByText('Bukti belum tersedia', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Verifikasi & Cairkan Kas' }).click();
-  await expect(
-    page.getByRole('alert').filter({ hasText: 'Pencairan memerlukan migrasi database transaksi' }),
-  ).toBeVisible();
+  await expect(page.getByText('Selesai / Dicairkan', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Buku Kas' }).click();
   await page.getByRole('button', { name: 'Mutasi Baru' }).click();
   await page.getByLabel('Nominal Rupiah').fill('100000');
@@ -187,6 +188,9 @@ test('Drive receipt link validates, persists after reload and opens in a new tab
   await page.getByRole('button', { name: '+ Request Reimburse' }).click();
   await page.getByLabel('Nama Program Kerja / Kegiatan').fill('Proker dengan bukti');
   await page.getByLabel('Nominal Pengeluaran').fill('25000');
+  await page
+    .getByLabel('Pos anggaran tahun berjalan')
+    .selectOption({ label: `Operasional (${new Date().getFullYear()})` });
   await page.getByLabel('Nomor Rekening').fill('12345');
   const folderPopup = page.waitForEvent('popup');
   await page.getByRole('link', { name: 'Buka folder upload' }).click();
@@ -473,4 +477,75 @@ test('new feature read failures do not prevent existing portal actions', async (
   await expect(
     page.getByRole('link', { name: 'Buka template Notulensi (tab baru)', exact: true }),
   ).toBeVisible();
+});
+
+test('personal reimburse retries a lost response once and cancellation stays private', async ({
+  page,
+  request,
+}) => {
+  await request.get('http://127.0.0.1:54328/__test/actor?id=1&level=staff');
+  await login(page);
+  const personal = page.getByRole('region', { name: 'Reimburse Saya' });
+  await expect(personal.getByText('Belum ada klaim reimburse.')).toBeVisible();
+  await page.getByRole('button', { name: '+ Request Reimburse' }).click();
+  await page.getByLabel('Nama Program Kerja / Kegiatan').fill('Klaim retry pribadi');
+  await page.getByLabel('Nominal Pengeluaran').fill('25000');
+  await page.getByLabel('Nomor Rekening').fill('12345');
+  await page.getByLabel('Pos anggaran tahun berjalan').selectOption({ index: 1 });
+  await request.get('http://127.0.0.1:54328/__test/lose-creation-response');
+  await page.getByRole('button', { name: 'Kirim Klaim Reimburse' }).click();
+  await expect(page.getByRole('dialog').getByRole('alert')).toContainText(
+    'Perubahan gagal disimpan',
+  );
+  await page.getByRole('button', { name: 'Kirim Klaim Reimburse' }).click();
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+  expect(await (await request.get('http://127.0.0.1:54328/__test/finance-counts')).json()).toEqual({
+    claims: 1,
+    cash: 0,
+  });
+  await expect(personal.getByRole('heading', { name: 'Klaim retry pribadi' })).toBeVisible();
+  await personal.getByRole('button', { name: 'Batalkan klaim' }).click();
+  await personal.getByLabel('Alasan pembatalan').fill('Kegiatan dibatalkan');
+  await personal.getByRole('button', { name: 'Simpan keputusan' }).click();
+  await expect(personal.getByText('Dibatalkan', { exact: true })).toBeVisible();
+  await expect(personal.getByText(/Kegiatan dibatalkan/)).toBeVisible();
+  await request.get('http://127.0.0.1:54328/__test/actor?id=2&level=kadiv');
+  await page.reload();
+  await expect(personal.getByText('Belum ada klaim reimburse.')).toBeVisible();
+  await expect(personal.getByText('Klaim retry pribadi')).toHaveCount(0);
+});
+
+test('cash retry keeps one ledger entry and budget requires a pos for outgoing cash', async ({
+  page,
+  request,
+}) => {
+  await login(page);
+  await page.goto('/administrasi');
+  await page.getByRole('button', { name: 'Buku Kas' }).click();
+  await page.getByRole('button', { name: 'Mutasi Baru' }).click();
+  await page.getByLabel('Nominal Rupiah').fill('100000');
+  await page.getByLabel('Uraian / Keterangan Transaksi').fill('Kas retry');
+  await request.get('http://127.0.0.1:54328/__test/lose-creation-response');
+  await page.getByRole('button', { name: 'Simpan Mutasi Pemasukan' }).click();
+  await expect(page.getByRole('dialog').getByRole('alert')).toContainText(
+    'Perubahan gagal disimpan',
+  );
+  await page.getByRole('button', { name: 'Simpan Mutasi Pemasukan' }).click();
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+  expect(await (await request.get('http://127.0.0.1:54328/__test/finance-counts')).json()).toEqual({
+    claims: 0,
+    cash: 1,
+  });
+  await page.getByRole('button', { name: 'Mutasi Baru' }).click();
+  await page.getByRole('button', { name: '- Pengeluaran (Kas Keluar)' }).click();
+  await page.getByLabel('Nominal Rupiah').fill('5000');
+  await page.getByLabel('Uraian / Keterangan Transaksi').fill('Kas keluar');
+  await page.getByRole('button', { name: 'Simpan Mutasi Pengeluaran' }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.getByLabel('Pos anggaran tahun berjalan').selectOption({ index: 1 });
+  await page.getByRole('button', { name: 'Simpan Mutasi Pengeluaran' }).click();
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+  await page.goto('/dashboard');
+  await expect(page.getByText('Realisasi: Rp 5.000')).toBeVisible();
+  await expect(page.getByText('Historis terpisah: Rp 7.000 (belum direkonsiliasi)')).toBeVisible();
 });
