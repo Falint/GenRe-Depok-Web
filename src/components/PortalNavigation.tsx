@@ -15,11 +15,13 @@ export default function PortalNavigation({
   pathname,
   pendingBadges,
   financeAdmin,
+  manageContent = false,
 }: {
   mobile?: boolean;
   pathname: string;
   pendingBadges: { administrasi: number; komunikasi: number };
   financeAdmin: boolean;
+  manageContent?: boolean;
 }) {
   const items = [
     {
@@ -62,6 +64,16 @@ export default function PortalNavigation({
       icon: FolderGit2,
       badge: 0,
     },
+    ...(manageContent
+      ? [
+          {
+            href: PORTAL_ROUTES.kontenPublik,
+            label: mobile ? 'Publik' : 'Konten Publik',
+            icon: FileText,
+            badge: 0,
+          },
+        ]
+      : []),
   ];
   return (
     <nav
@@ -75,7 +87,7 @@ export default function PortalNavigation({
       <div
         className={
           mobile
-            ? 'flex items-center justify-around'
+            ? 'flex items-center justify-around gap-2 overflow-x-auto'
             : 'max-w-7xl mx-auto px-4 flex gap-4 overflow-x-auto'
         }
       >

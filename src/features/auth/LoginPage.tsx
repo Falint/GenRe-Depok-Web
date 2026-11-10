@@ -1,5 +1,6 @@
 'use client';
 import Image from 'next/image';
+import Link from 'next/link';
 import logoDepok from '../../../public/logo-depok.png';
 import logoSalamGenre from '../../../public/logo-salam-genre.png';
 import logoGenreDepok from '../../../public/logo-genre-depok.png';
@@ -63,14 +64,14 @@ export default function LoginPage({
             </h1>
             <p className="mt-4 text-base leading-7 text-primera-ivory">{KABINET.tagline}</p>
             <p className="mt-6 max-w-md text-sm leading-7 text-primera-ivory/80 sm:text-base">
-              Akses administrasi, koordinasi, dan sumber daya Forum GenRe Kota Depok dalam satu
-              ruang kerja yang aman.
+              Kenali Forum GenRe Kota Depok sebagai tamu, atau masuk sebagai pengurus untuk
+              mengakses ruang kerja organisasi.
             </p>
           </div>
 
           <div className="relative flex items-center gap-3 text-xs text-primera-ivory">
             <ShieldCheck className="h-4 w-4 text-primera-gold" aria-hidden="true" />
-            <span>Akses sesuai peran kepengurusan Anda.</span>
+            <span>Ruang informasi publik dan portal kepengurusan.</span>
           </div>
         </section>
 
@@ -155,6 +156,15 @@ export default function LoginPage({
               </button>
             </form>
 
+            <Link
+              href="/publik"
+              className="mt-5 flex w-full items-center justify-center rounded-xl border-2 border-genre-blue px-4 py-3 text-sm font-bold text-genre-blue hover:bg-genre-blue-light focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4"
+            >
+              Masuk sebagai tamu
+            </Link>
+            <p className="mt-2 text-center text-xs text-slate-500">
+              Baca profil, berita, dan agenda tanpa akun.
+            </p>
             <p className="mt-8 border-t border-slate-100 pt-5 text-xs leading-5 text-slate-500">
               Akun dibuat oleh administrator Forum. Hubungi pengurus inti jika Anda belum memiliki
               akses atau memerlukan bantuan akun.

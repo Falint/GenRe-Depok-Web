@@ -1,5 +1,6 @@
 'use client';
 import Image from 'next/image';
+import Link from 'next/link';
 import logoDepok from '../../public/logo-depok.png';
 import logoDp3ap2kb from '../../public/logo-dp3ap2kb.png';
 import logoSalamGenre from '../../public/logo-salam-genre.png';
@@ -131,6 +132,12 @@ export default function Header({
               Kabinet {KABINET.nama} <span className="text-slate-600">· {KABINET.periode}</span>
             </p>
           </div>
+          <Link
+            href="/publik"
+            className="rounded-lg px-2 py-2 text-xs font-bold text-genre-blue hover:underline focus-visible:outline"
+          >
+            Lihat portal publik
+          </Link>
           <p className="hidden max-w-sm text-right text-xs sm:block">{KABINET.tagline}</p>
         </div>
       </div>

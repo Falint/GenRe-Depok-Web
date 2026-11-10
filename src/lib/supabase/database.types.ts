@@ -6,6 +6,7 @@ import type {
   divisionSchema,
 } from '@/features/panitia/schema';
 import type { mediaSchema, contentHistorySchema } from '@/features/media/schema';
+import type { publicContentSchema } from '@/features/publik/schema';
 import type { Row } from '@/features/portal/schema';
 
 // Schema contract derived from supabase_setup.sql and supabase/migrations, not generated against the live database.
@@ -18,6 +19,10 @@ type Table<T, Required extends keyof T> = {
 export type Database = {
   public: {
     Tables: {
+      public_content: Table<
+        z.infer<typeof publicContentSchema>,
+        'id' | 'jenis' | 'judul' | 'ringkasan' | 'isi'
+      >;
       bidang: Table<{ id: string; nama: string }, 'id' | 'nama'>;
       divisi: Table<z.infer<typeof divisionSchema>, 'id' | 'nama' | 'bidang_id'>;
       panitia_requests: Table<z.infer<typeof requestSchema>, 'judul'>;
@@ -62,6 +67,10 @@ export type Database = {
     };
     Views: { [_ in never]: never };
     Functions: {
+      save_portal_public_content: {
+        Args: { target_id: string; expected_version: number; input: Record<string, unknown> };
+        Returns: undefined;
+      };
       list_portal_budgets: {
         Args: Record<string, never>;
         Returns: { id: string; bidang: string; tahun_anggaran: number }[];

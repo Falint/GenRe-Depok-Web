@@ -486,6 +486,8 @@ test('personal reimburse retries a lost response once and cancellation stays pri
   await request.get('http://127.0.0.1:54328/__test/actor?id=1&level=staff');
   await login(page);
   const personal = page.getByRole('region', { name: 'Reimburse Saya' });
+  // The local fixture has no Realtime websocket; refresh clears its connection warning.
+  await personal.getByRole('button', { name: 'Refresh reimburse' }).click();
   await expect(personal.getByText('Belum ada klaim reimburse.')).toBeVisible();
   await page.getByRole('button', { name: '+ Request Reimburse' }).click();
   await page.getByLabel('Nama Program Kerja / Kegiatan').fill('Klaim retry pribadi');
@@ -511,6 +513,7 @@ test('personal reimburse retries a lost response once and cancellation stays pri
   await expect(personal.getByText(/Kegiatan dibatalkan/)).toBeVisible();
   await request.get('http://127.0.0.1:54328/__test/actor?id=2&level=kadiv');
   await page.reload();
+  await personal.getByRole('button', { name: 'Refresh reimburse' }).click();
   await expect(personal.getByText('Belum ada klaim reimburse.')).toBeVisible();
   await expect(personal.getByText('Klaim retry pribadi')).toHaveCount(0);
 });

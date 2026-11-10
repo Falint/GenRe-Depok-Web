@@ -13,9 +13,24 @@ import {
   Building2,
   BookOpen,
 } from 'lucide-react';
-import { JOBDESC_DATA, KABINET } from './content';
+import { KABINET } from './content';
 
-export default function StrukturJobdescTab() {
+export type Jobdesc = {
+  no: number;
+  jabatan: string;
+  pejabat?: string;
+  kategori: string;
+  jobdescPerbaikan: string;
+  jobdescLama?: string;
+};
+
+export default function StrukturJobdescTab({
+  jobdescs,
+  publicView = false,
+}: {
+  jobdescs: Jobdesc[];
+  publicView?: boolean;
+}) {
   const [activeSubTab, setActiveSubTab] = useState('organogram'); // 'organogram' | 'jobdesc'
   const [searchJobdesc, setSearchJobdesc] = useState('');
   const [selectedKategori, setSelectedKategori] = useState('Semua');
@@ -25,7 +40,7 @@ export default function StrukturJobdescTab() {
     setExpandedId(expandedId === no ? null : no);
   };
 
-  const filteredJobdesc = JOBDESC_DATA.filter((item) => {
+  const filteredJobdesc = jobdescs.filter((item) => {
     const matchSearch =
       item.jabatan.toLowerCase().includes(searchJobdesc.toLowerCase()) ||
       (item.pejabat && item.pejabat.toLowerCase().includes(searchJobdesc.toLowerCase())) ||
@@ -95,7 +110,9 @@ export default function StrukturJobdescTab() {
           }`}
         >
           <BookOpen className="w-3.5 h-3.5" />
-          <span>Direktori 32 Jobdesc (Lama vs Perbaikan)</span>
+          <span>
+            {publicView ? 'Direktori Jobdesc Resmi' : 'Direktori 32 Jobdesc (Lama vs Perbaikan)'}
+          </span>
         </button>
       </div>
 
@@ -360,11 +377,11 @@ export default function StrukturJobdescTab() {
                   className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-sm hover:border-slate-300 transition-all"
                 >
                   <div
-                    aria-expanded={isExpanded}
-                    onClick={() => toggleExpand(item.no)}
+                    aria-expanded={publicView ? undefined : isExpanded}
+                    onClick={publicView ? undefined : () => toggleExpand(item.no)}
                     className="flex items-start justify-between cursor-pointer"
-                    role="button"
-                    tabIndex={0}
+                    role={publicView ? undefined : 'button'}
+                    tabIndex={publicView ? undefined : 0}
                     onKeyDown={(event) => {
                       if (
                         event.target === event.currentTarget &&
@@ -393,16 +410,18 @@ export default function StrukturJobdescTab() {
                       <h3 className="font-black text-base text-slate-900">{item.jabatan}</h3>
                     </div>
 
-                    <span
-                      aria-hidden="true"
-                      className="p-1.5 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
-                    >
-                      {isExpanded ? (
-                        <ChevronUp className="w-4 h-4" />
-                      ) : (
-                        <ChevronDown className="w-4 h-4" />
-                      )}
-                    </span>
+                    {!publicView && (
+                      <span
+                        aria-hidden="true"
+                        className="p-1.5 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
+                      >
+                        {isExpanded ? (
+                          <ChevronUp className="w-4 h-4" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4" />
+                        )}
+                      </span>
+                    )}
                   </div>
 
                   {/* Standard Jobdesc Preview */}
@@ -414,7 +433,7 @@ export default function StrukturJobdescTab() {
                   </div>
 
                   {/* Expanded Comparative View: Jobdesc Lama */}
-                  {isExpanded && (
+                  {!publicView && isExpanded && (
                     <div className="mt-3 p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 leading-relaxed animate-in fade-in duration-150">
                       <p className="text-[10px] font-bold uppercase text-slate-400 mb-1">
                         Catatan Historis: Jobdesc Lama

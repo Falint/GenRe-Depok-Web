@@ -995,3 +995,106 @@ test('December submission paid in January keeps original budget, cash date and r
     sql(cashDefinition);
   }
 });
+
+test('public content RLS, publication, validation and concurrent edits preserve boundaries', async () => {
+  sql(readFileSync('supabase/migrations/202611100001_public_content.sql', 'utf8'));
+  for (const value of [501, 502, 503]) {
+    sql(`INSERT INTO auth.users(id,email) VALUES ('${id(value)}','public${value}@example.org');
+      UPDATE public.profiles SET level='${value === 501 ? 'inti' : 'staff'}', bidang_id=${value === 502 ? "'branding'" : 'NULL'}, divisi_id=NULL WHERE id='${id(value)}';`);
+  }
+  const base = {
+    jenis: 'berita',
+    judul: 'Kabar publik',
+    ringkasan: 'Ringkasan',
+    isi: 'Isi',
+    status: 'draft',
+    mulai_at: null,
+    selesai_at: null,
+    lokasi: '',
+  };
+  const save = (target: number, version: number, patch: Record<string, unknown> = {}) =>
+    `SELECT public.save_portal_public_content('${id(target)}',${version},'${JSON.stringify({ ...base, ...patch })}')`;
+  const asAnon = (statement: string) => `SET ROLE anon; ${statement}`;
+  sql(asUser(501, save(510, -1)));
+  assert.equal(sql(asAnon('SELECT count(*) FROM public.public_content')).split('\n').at(-1), '0');
+  assert.equal(
+    sql(asUser(503, 'SELECT count(*) FROM public.public_content')).split('\n').at(-1),
+    '0',
+  );
+  assert.equal(
+    sql(asUser(502, 'SELECT count(*) FROM public.public_content')).split('\n').at(-1),
+    '1',
+  );
+  assert.throws(() => sql(asAnon(save(511, -1))), /permission denied/i);
+  assert.throws(() => sql(asUser(503, save(511, -1))), /Permission denied/);
+  for (const role of ['anon', 'authenticated']) {
+    assert.equal(
+      sql(
+        `SELECT has_table_privilege('${role}','public.public_content','INSERT') OR has_table_privilege('${role}','public.public_content','UPDATE') OR has_table_privilege('${role}','public.public_content','DELETE') OR has_table_privilege('${role}','public.public_content','TRUNCATE')`,
+      ),
+      'f',
+    );
+  }
+  assert.throws(
+    () => sql(asUser(501, "UPDATE public.public_content SET status='published'")),
+    /permission denied/i,
+  );
+  sql(asUser(502, save(510, 0, { status: 'published' })));
+  assert.equal(sql(asAnon('SELECT count(*) FROM public.public_content')).split('\n').at(-1), '1');
+  assert.equal(
+    sql(asUser(503, 'SELECT count(*) FROM public.public_content')).split('\n').at(-1),
+    '1',
+  );
+  assert.equal(
+    sql(
+      `SELECT published_at IS NOT NULL AND version=1 FROM public.public_content WHERE id='${id(510)}'`,
+    ),
+    't',
+  );
+  assert.throws(() => sql(asUser(501, save(510, 0))), /Data berubah/);
+  sql(asUser(501, save(510, 1)));
+  assert.equal(sql(asAnon('SELECT count(*) FROM public.public_content')).split('\n').at(-1), '0');
+  assert.equal(
+    sql(`SELECT published_at IS NULL FROM public.public_content WHERE id='${id(510)}'`),
+    't',
+  );
+  for (const patch of [
+    { jenis: 'agenda' },
+    { judul: ' ' },
+    { ringkasan: 'x'.repeat(501) },
+    { status: 'scheduled' },
+    { judul: { invalid: true } },
+    { extra: 'unexpected' },
+    { jenis: 'agenda', mulai_at: 'infinity', lokasi: 'Depok' },
+    {
+      jenis: 'agenda',
+      mulai_at: '2026-11-11T09:00:00+07:00',
+      selesai_at: '2026-11-11T08:00:00+07:00',
+      lokasi: 'Depok',
+    },
+  ])
+    assert.throws(() => sql(asUser(501, save(511, -1, patch))));
+  sql(
+    asUser(
+      502,
+      save(511, -1, {
+        jenis: 'agenda',
+        mulai_at: '2026-11-11T09:00:00+07:00',
+        lokasi: 'Depok',
+        status: 'published',
+      }),
+    ),
+  );
+  assert.equal(
+    sql(
+      `SELECT mulai_at='2026-11-11T02:00:00Z'::timestamptz FROM public.public_content WHERE id='${id(511)}'`,
+    ),
+    't',
+  );
+  const competing = await Promise.all([
+    concurrentSql(asUser(501, save(510, 2, { status: 'published', judul: 'Edit pertama' }))),
+    concurrentSql(asUser(502, save(510, 2, { status: 'published', judul: 'Edit kedua' }))),
+  ]);
+  assert.equal(competing.filter(Boolean).length, 1);
+  assert.equal(sql(`SELECT version FROM public.public_content WHERE id='${id(510)}'`), '3');
+});

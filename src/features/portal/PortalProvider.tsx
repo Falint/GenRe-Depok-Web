@@ -292,6 +292,7 @@ export default function PortalProvider({
           pathname={pathname}
           pendingBadges={pendingBadges}
           financeAdmin={financeAdmin}
+          manageContent={currentRole.manageContent}
         />
         <main
           id="main-content"
@@ -320,6 +321,7 @@ export default function PortalProvider({
           pathname={pathname}
           pendingBadges={pendingBadges}
           financeAdmin={financeAdmin}
+          manageContent={currentRole.manageContent}
         />
         <Suspense
           fallback={

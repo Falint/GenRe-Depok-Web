@@ -2,6 +2,10 @@
 
 Ruang kerja pengurus untuk administrasi surat, klaim reimburse, buku kas, pengumuman dan konfirmasi kehadiran, tiket informasi, profil organisasi, struktur dan 32 jobdesc, serta katalog sumber daya. Identitas visual GenRe dan konten organisasi dipertahankan.
 
+Portal juga menyediakan bagian eksternal melalui tombol **Masuk sebagai tamu** pada login. `/publik` memuat profil, struktur beserta jobdesc resmi, berita, agenda, dan kontak. Tamu tidak membutuhkan akun; tautan publik dapat langsung dibagikan. Nama pengurus dan jobdesc resmi ditampilkan, sedangkan catatan jobdesc lama tetap internal.
+
+Pengurus inti dan bidang Branding mengelola berita/agenda melalui `/konten-publik`: simpan draft, terbitkan, edit, dan tarik publikasi. Data tersimpan pada tabel `public_content`, terpisah dari pengumuman internal. Tamu hanya dapat membaca konten published melalui RLS. Fitur ini memerlukan migration `202611100001_public_content.sql`; lihat [panduan portal publik](docs/PUBLIC_PORTAL_ROLLOUT.md). Tidak ada upload gambar, pendaftaran kegiatan, atau penjadwalan publikasi otomatis. Profil, struktur, dan kontak masih diperbarui melalui kode.
+
 Identitas Kabinet PRIMERA (PRIME ERA), periode 2026–2028, hadir pada login, header, dasbor, profil, dan brand kit. Bagian identitas memakai palet PRIMERA; tema utama dan logo institusi GenRe tetap dipertahankan. Logo PRIMERA berupa SVG rancangan sementara, tersedia untuk diunduh dengan keterangan statusnya di brand kit. Pusat Sumber Daya juga menyediakan empat tautan template sekretariat dari dokumen evaluasi: Notulensi, MOU, Surat Dispensasi, dan Surat Undangan. Semua pengurus yang login dapat membukanya; akses Google Docs mengikuti izin dokumen, tanpa penyalinan atau pengubahan otomatis oleh portal.
 
 ## Stack dan prasyarat
@@ -42,7 +46,7 @@ Build memakai Webpack resmi karena worker CSS Turbopack ditolak oleh lingkungan 
 
 ```text
 src/
-  app/                    # Server layouts/pages, login, enam route portal, error/loading/404
+  app/                    # Server layouts/pages, login, route internal/publik, error/loading/404
   components/             # Header, navigasi, dialog native dan form modal
   features/
     auth/                 # Form login, sesi server, izin profil
@@ -52,6 +56,7 @@ src/
     panitia/              # Request lintas bidang, assignment dan audit
     organisasi/           # Profil organisasi, struktur dan konten jobdesc resmi
     portal/               # Context UI, schema, mapping, pembacaan data, shared mutation checks
+    publik/               # Berita/agenda publik, validasi, loader dan editor internal
   lib/
     supabase/             # Client browser/server, konfigurasi tervalidasi, kontrak schema
     errors.ts             # Result dan pesan error aman
@@ -60,7 +65,7 @@ src/
 supabase/migrations/      # SQL hardening yang harus ditinjau dan diterapkan terpisah
 ```
 
-`/` mengalihkan ke `/login` atau `/dashboard`. Halaman portal: `/dashboard`, `/profil`, `/struktur`, `/administrasi`, `/komunikasi`, `/media`. Halaman memerlukan user Supabase dan profil valid. Administrasi tersedia untuk inti/kabid; panel keuangan tetap khusus inti. Semua peran dapat mengajukan surat/reimburse dari dasbor. Parameter query pada deep link dipertahankan saat login; tujuan redirect dibatasi pada route portal sendiri.
+`/` mengalihkan ke `/login` atau `/dashboard`. Halaman portal internal: `/dashboard`, `/profil`, `/struktur`, `/administrasi`, `/komunikasi`, `/media`, dan `/konten-publik` (khusus inti/Branding). Halaman memerlukan user Supabase dan profil valid. Administrasi tersedia untuk inti/kabid; panel keuangan tetap khusus inti. Semua peran dapat mengajukan surat/reimburse dari dasbor. Parameter query pada deep link dipertahankan saat login; tujuan redirect dibatasi pada route portal sendiri.
 
 ## Data, autentikasi, dan otorisasi
 
@@ -70,21 +75,23 @@ Browser Supabase hanya menangani sesi cookie dan subscription Realtime. Token ti
 
 `database.types.ts` diturunkan dari SQL repository, bukan hasil introspeksi database live. Cocokkan schema staging sebelum rollout. Tidak ada route atau client untuk WhatsApp, webhook, atau automation karena belum ada integrasi existing yang memerlukannya. Integrasi mendatang ditempatkan pada modul server dengan validasi input dan kredensial server; jangan memasukkan key provider ke `NEXT_PUBLIC_*`.
 
-## Pembaruan finance lokal (8 November 2026)
+## Pembaruan finance (8 November 2026)
 
-Reimburse Saya, pembatalan/penolakan beralasan, retry idempotent, serta anggaran berdasarkan reservasi dan ledger sudah disiapkan di kode lokal. Pagu historis `terpakai` tampil terpisah; data tanpa pos tidak direkonsiliasi otomatis. Fitur ini membutuhkan tiga migration 20261108 yang **belum diterapkan agent**. Pemilik menjalankannya bertahap melalui SQL Editor development sesuai [panduan rollout finance](docs/FINANCE_ROLLOUT.md). Catatan status sebelumnya di bawah merupakan riwayat; snapshot metadata terbaru tersedia pada AGENTS.md.
+Reimburse Saya, pembatalan/penolakan beralasan, retry idempotent, serta anggaran berdasarkan reservasi dan ledger sudah disiapkan di kode lokal. Pagu historis `terpakai` tampil terpisah; data tanpa pos tidak direkonsiliasi otomatis. Fitur ini membutuhkan tiga migration 20261108. Pemilik menjalankannya bertahap melalui SQL Editor development sesuai [panduan rollout finance](docs/FINANCE_ROLLOUT.md); agent tidak menerapkannya. Snapshot metadata dan batas verifikasi tersedia pada AGENTS.md.
 
 ## Supabase dan status database
 
 `supabase_setup.sql` adalah setup baseline proyek, bukan migration runner otomatis. Jangan menjalankannya ulang pada database existing. Aplikasi tidak menerapkan SQL atau menjalankan seed saat install, build, test E2E, maupun startup.
 
-**Berdasarkan konfirmasi pemilik proyek, database live berasal dari seluruh file SQL yang sudah ada sebelum penambahan fitur koordinasi, termasuk hardening dan kedua RPC transaksi yang sudah diterapkan.** Status ini berdasarkan konfirmasi pemilik, bukan hasil pemeriksaan langsung database live oleh agent. [SQL hardening](supabase/migrations/202611060001_portal_hardening.sql) dan [catatan migrasi](docs/MIGRATION.md) tetap menjadi referensi implementasi; catatan historis yang menyebut hardening belum diterapkan tidak lagi menggambarkan status penerapannya saat ini.
+Target Supabase `kwwbqcamoyjhgzaidtbf` dikonfirmasi pemilik sebagai development/uji coba. Pemeriksaan metadata read-only pada 8 November 2026 menemukan objek hardening, RPC transaksi, koordinasi, dan katalog media sesuai SQL repository. Riwayat migration kosong tidak berarti objek tersebut belum diterapkan. Detail dan batas pemeriksaan tersedia pada AGENTS.md.
 
-Dua SQL baru, `202611070001_coordination.sql` dan `202611070002_media_catalog.sql`, **belum dinyatakan diterapkan ke live**. SQL ini menambah master bidang/divisi, panitia lintas bidang dengan approval Kadiv tujuan, jadwal/pembatalan pengumuman, katalog media beserta audit, dan timestamp. Panduan penerapan, pemeriksaan akun, serta rollback tersedia di [Rollout Koordinasi](docs/COORDINATION_ROLLOUT.md).
+Migration koordinasi `202611070001_coordination.sql` dan katalog `202611070002_media_catalog.sql` tetap menjadi referensi schema. Panduan penerapan dan rollback tersedia di [Rollout Koordinasi](docs/COORDINATION_ROLLOUT.md). Jangan menerapkan ulang migration untuk mengisi riwayat yang kosong.
+
+Untuk portal publik, migration `202611100001_public_content.sql` menambahkan tabel terpisah, RLS pembaca publik, dan RPC pengelolaan khusus inti/Branding. Pemilik telah mengonfirmasi pengujian fitur berhasil setelah implementasi. Agent tidak menerapkan migration atau memverifikasi ulang Supabase live; konfirmasi pemilik tidak menggantikan audit database. Ikuti [panduan portal publik](docs/PUBLIC_PORTAL_ROLLOUT.md) untuk pemasangan baru dan rollback.
 
 Pengumuman dan media baru dikelola inti serta pengurus Bidang Branding. Penugasan panitia berada di tab **Kebutuhan Panitia** dalam Komunikasi dan terpisah dari absensi. Dasbor menyediakan kalender WIB; deadline tiket lama tetap berupa teks sampai tanggal kalender ditetapkan. Tanggal penambahan aset katalog lama tidak ditebak. Palet, PRIMERA, dan empat template tetap tersedia saat layanan katalog mengalami gangguan.
 
-Isu perubahan role sendiri masih menjadi tindak lanjut yang perbaikannya ditunda oleh pemilik proyek. Status penerapan hardening di atas bukan pernyataan bahwa seluruh aspek keamanan sudah selesai ditinjau atau seluruh celah sudah ditutup.
+Snapshot 8 November 2026 menemukan bahwa `anon` dan `authenticated` tidak memiliki izin write profil, termasuk perubahan role sendiri. Pemeriksaan metadata ini bukan sertifikasi seluruh keamanan atau bukti perilaku runtime. Temuan dan tindak lanjut lainnya dicatat pada AGENTS.md.
 
 RPC adalah pemanggilan fungsi database dari aplikasi. `approve_portal_surat` menyimpan persetujuan dan riwayat surat dalam satu transaksi. `disburse_portal_reimburse` mencatat kas keluar, riwayat persetujuan, dan status pencairan dalam satu transaksi. Jika salah satu langkah gagal, seluruh transaksi dibatalkan. Penguncian row dan relasi ledger unik mencegah pencairan berulang membuat catatan kas ganda. RPC pencairan hanya mencatat pencairan yang telah diverifikasi; tidak mentransfer uang ke bank.
 
@@ -109,9 +116,9 @@ npm run format:check
 npm run build
 ```
 
-Unit test mencakup matriks izin empat peran, validasi nominal/input, format data, saldo lintas tahun, attendance dan redirect aman. Test database membuat cluster PostgreSQL baru di direktori sementara, menjalankan baseline, hardening, dan migration koordinasi/katalog **hanya di cluster itu**, menguji RLS, idempotency, rollback dan pencairan bersamaan, lalu menghapus cluster. Tidak membaca konfigurasi Supabase live.
+Unit test mencakup matriks izin empat peran, validasi nominal/input, format data, saldo lintas tahun, attendance, redirect aman, serta validasi berita/agenda. Test database membuat cluster PostgreSQL baru di direktori sementara, menjalankan baseline dan migration terkait **hanya di cluster itu**, menguji RLS, idempotency, rollback, pencairan bersamaan, publikasi/penarikan konten, dan konflik edit, lalu menghapus cluster. Tidak membaca konfigurasi Supabase live.
 
-Playwright menjalankan Next.js dan fixture HTTP Supabase di `127.0.0.1:3100` dan `127.0.0.1:54328`. Kredensial fiktif hanya ada di test. E2E mencakup browser Chromium desktop/mobile. Fixture tidak membuktikan konfigurasi Supabase live atau Realtime produksi; PostgreSQL test terpisah memverifikasi SQL asli. Bila memakai lokasi browser sementara, set `PLAYWRIGHT_BROWSERS_PATH` yang sama saat install dan test.
+Playwright menjalankan Next.js dan fixture HTTP Supabase di `127.0.0.1:3100` dan `127.0.0.1:54328`. Kredensial fiktif hanya ada di test. E2E mencakup browser Chromium desktop/mobile: login pengurus, akses tamu, navigasi publik, pagination berita, agenda mendatang/lampau, draft tersembunyi, publikasi/penarikan, izin pengelola, dan pemulihan error. Fixture tidak membuktikan konfigurasi Supabase live atau Realtime produksi; PostgreSQL test terpisah memverifikasi SQL asli. Bila memakai lokasi browser sementara, set `PLAYWRIGHT_BROWSERS_PATH` yang sama saat install dan test.
 
 ## Batas fitur existing
 
@@ -125,4 +132,4 @@ Playwright menjalankan Next.js dan fixture HTTP Supabase di `127.0.0.1:3100` dan
 - Periode kepengurusan ditampilkan konsisten sebagai 2026–2028 sesuai dokumen evaluasi dan konfirmasi pemilik. Tahun transaksi dan anggaran mengikuti data masing-masing.
 - Registrasi mandiri dan reset kata sandi belum menjadi fitur portal.
 
-Tidak ada deploy, perubahan Supabase live, rotasi kredensial, atau layanan berbayar yang dilakukan dalam migrasi ini.
+Agent tidak melakukan deploy, menerapkan SQL ke Supabase live, merotasi kredensial, atau mengaktifkan layanan berbayar. Penerapan SQL oleh pemilik dan hasil pengujiannya dicatat terpisah di atas.

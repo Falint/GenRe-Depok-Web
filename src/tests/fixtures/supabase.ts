@@ -2,6 +2,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
+import { publicContentInput } from '../../features/publik/schema';
 import { MEDIA_LIBRARY } from '../../features/media/content';
 import type { Profile, RoleLevel } from '../../features/portal/schema';
 
@@ -131,6 +132,7 @@ function reset() {
       'panitia_history',
       'media_resources',
       'content_history',
+      'public_content',
     ].map((table) => [table, []]),
   );
   rows.pagu_anggaran = [
@@ -232,6 +234,48 @@ createServer(async (request, response) => {
       reset();
       return send(response, 200, {});
     }
+    if (url.pathname === '/__test/public-content') {
+      rows.public_content = Array.from({ length: 14 }, (_, index) => ({
+        id: fixtureId(300 + index),
+        jenis: 'berita',
+        judul: `Berita uji ${index + 1}`,
+        ringkasan: 'Ringkasan publik',
+        isi: '<script>alert(1)</script> Isi berita sebagai teks.',
+        status: 'published',
+        mulai_at: null,
+        selesai_at: null,
+        lokasi: '',
+        published_at: new Date(Date.UTC(2026, 0, index + 1)).toISOString(),
+        updated_at: '2026-01-01T00:00:00Z',
+        version: 0,
+      }));
+      rows.public_content.push({
+        ...rows.public_content[0],
+        id: fixtureId(350),
+        judul: 'Draft rahasia',
+        status: 'draft',
+        published_at: null,
+      });
+      rows.public_content.push({
+        ...rows.public_content[0],
+        id: fixtureId(360),
+        jenis: 'agenda',
+        judul: 'Agenda mendatang',
+        mulai_at: '2099-01-01T02:00:00Z',
+        selesai_at: null,
+        lokasi: 'Depok',
+      });
+      rows.public_content.push({
+        ...rows.public_content[0],
+        id: fixtureId(361),
+        jenis: 'agenda',
+        judul: 'Agenda lampau',
+        mulai_at: '2020-01-01T02:00:00Z',
+        selesai_at: null,
+        lokasi: 'Depok',
+      });
+      return send(response, 200, {});
+    }
     if (url.pathname === '/__test/place-member') {
       placements[fixtureId(Number(url.searchParams.get('id')))] = {
         divisi_id: url.searchParams.get('division'),
@@ -274,7 +318,8 @@ createServer(async (request, response) => {
       return send(response, 200, user());
     }
     if (url.pathname === '/auth/v1/logout') return send(response, 200, {});
-    if (!request.headers.authorization?.startsWith('Bearer eyJ'))
+    const authenticated = !!request.headers.authorization?.startsWith('Bearer eyJ');
+    if (!authenticated && !(url.pathname === '/rest/v1/public_content' && request.method === 'GET'))
       return send(response, 401, { message: 'Unauthorized' });
     if (url.pathname.startsWith('/rest/v1/rpc/')) {
       const name = url.pathname.split('/').at(-1);
@@ -282,6 +327,27 @@ createServer(async (request, response) => {
       const input = z.record(z.string(), z.unknown()).parse(v.input || {});
       const now = new Date().toISOString();
       const contentManager = level === 'inti' || field === 'branding';
+      if (name === 'save_portal_public_content') {
+        if (!contentManager) return send(response, 403, { code: '42501' });
+        const parsed = publicContentInput.safeParse(input);
+        if (!parsed.success) return send(response, 400, { code: '23514' });
+        const previous = rows.public_content.find((row) => row.id === v.target_id);
+        if (
+          (v.expected_version === -1 && previous) ||
+          (v.expected_version !== -1 && (!previous || previous.version !== v.expected_version))
+        )
+          return send(response, 409, { code: '40001' });
+        const saved = {
+          ...parsed.data,
+          id: v.target_id,
+          version: previous ? Number(previous.version) + 1 : 0,
+          published_at: input.status === 'published' ? previous?.published_at || now : null,
+          updated_at: now,
+        };
+        if (previous) Object.assign(previous, saved);
+        else rows.public_content.push(saved);
+        return send(response, 200, null);
+      }
       if (name === 'list_portal_budgets')
         return send(
           response,
@@ -535,6 +601,29 @@ createServer(async (request, response) => {
       return send(response, 500, { code: 'fixture_error' });
     if (request.method === 'GET' || request.method === 'HEAD') {
       let results: Record<string, unknown>[] = table === 'profiles' ? directory() : rows[table];
+      if (table === 'public_content') {
+        results = results.filter(
+          (row) =>
+            row.status === 'published' ||
+            (authenticated && (level === 'inti' || field === 'branding')),
+        );
+        for (const key of ['mulai_at']) {
+          const filter = url.searchParams.get(key);
+          if (filter?.startsWith('gte.'))
+            results = results.filter((row) => String(row[key]) >= filter.slice(4));
+          if (filter?.startsWith('lt.'))
+            results = results.filter((row) => String(row[key]) < filter.slice(3));
+        }
+        const orders = (url.searchParams.get('order') || '').split(',');
+        results = [...results].sort((a, b) => {
+          for (const order of orders) {
+            const [key, direction] = order.split('.');
+            const comparison = String(a[key]).localeCompare(String(b[key]));
+            if (comparison) return direction === 'desc' ? -comparison : comparison;
+          }
+          return 0;
+        });
+      }
       if (table === 'reimburse' && level !== 'inti')
         results = results.filter((r) => r.pemohon_id === userId);
       if (table === 'reimburse_approval' && level !== 'inti')

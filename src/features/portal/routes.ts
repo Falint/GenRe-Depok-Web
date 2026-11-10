@@ -5,6 +5,7 @@ export const PORTAL_ROUTES = {
   administrasi: '/administrasi',
   komunikasi: '/komunikasi',
   media: '/media',
+  kontenPublik: '/konten-publik',
 } as const;
 export type PortalTab = keyof typeof PORTAL_ROUTES;
 
