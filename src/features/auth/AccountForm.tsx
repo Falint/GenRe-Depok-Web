@@ -1,6 +1,7 @@
 'use client';
 import { useActionState, useState } from 'react';
 import Link from 'next/link';
+import { Eye, EyeOff } from 'lucide-react';
 import { registerForm, emailForm, resetPasswordForm } from './actions';
 import type { Result } from '@/lib/errors';
 
@@ -13,6 +14,8 @@ export default function AccountForm({
   configured: boolean;
   invalid?: boolean;
 }) {
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmation, setShowConfirmation] = useState(false);
   const [values, setValues] = useState({
     nama_lengkap: '',
     email: '',
@@ -52,7 +55,7 @@ export default function AccountForm({
           {mode === 'register'
             ? 'Gunakan Gmail aktif. Akun baru menjadi tamu; administrator menetapkan akses pengurus.'
             : mode === 'reset'
-              ? 'Gunakan kata sandi khusus portal minimal 12 karakter.'
+              ? 'Gunakan kata sandi khusus portal minimal 8 karakter.'
               : 'Masukkan Gmail terdaftar untuk menerima tautan melalui email.'}
         </p>
         {invalid && (
@@ -105,40 +108,78 @@ export default function AccountForm({
             )}
             {(mode === 'register' || mode === 'reset') && (
               <>
-                <label className="block text-sm font-semibold">
-                  Kata sandi portal
-                  <input
-                    value={values.password}
-                    onChange={(e) =>
-                      setValues((current) => ({ ...current, password: e.target.value }))
-                    }
-                    name="password"
-                    type="password"
-                    autoComplete="new-password"
-                    minLength={12}
-                    maxLength={1024}
-                    required
-                    className={inputClass}
-                  />
-                </label>
-                <label className="block text-sm font-semibold">
-                  Konfirmasi kata sandi
-                  <input
-                    value={values.confirmation}
-                    onChange={(e) =>
-                      setValues((current) => ({ ...current, confirmation: e.target.value }))
-                    }
-                    name="confirmation"
-                    type="password"
-                    autoComplete="new-password"
-                    minLength={12}
-                    maxLength={1024}
-                    required
-                    className={inputClass}
-                  />
-                </label>
+                <div className="text-sm font-semibold">
+                  <label htmlFor="new-password">Kata sandi</label>
+                  <div className="relative">
+                    <input
+                      id="new-password"
+                      value={values.password}
+                      onChange={(e) =>
+                        setValues((current) => ({ ...current, password: e.target.value }))
+                      }
+                      name="password"
+                      type={showPassword ? 'text' : 'password'}
+                      autoComplete="new-password"
+                      minLength={8}
+                      maxLength={1024}
+                      required
+                      className={`${inputClass} pr-14`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((value) => !value)}
+                      aria-label={showPassword ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'}
+                      aria-pressed={showPassword}
+                      aria-controls="new-password"
+                      className="absolute inset-y-0 right-1 mt-2 flex w-11 items-center justify-center rounded-lg text-slate-500 hover:text-genre-blue focus-visible:outline focus-visible:outline-2 focus-visible:outline-genre-blue"
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-5 w-5" aria-hidden="true" />
+                      ) : (
+                        <Eye className="h-5 w-5" aria-hidden="true" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+                <div className="text-sm font-semibold">
+                  <label htmlFor="confirm-password">Konfirmasi kata sandi</label>
+                  <div className="relative">
+                    <input
+                      id="confirm-password"
+                      value={values.confirmation}
+                      onChange={(e) =>
+                        setValues((current) => ({ ...current, confirmation: e.target.value }))
+                      }
+                      name="confirmation"
+                      type={showConfirmation ? 'text' : 'password'}
+                      autoComplete="new-password"
+                      minLength={8}
+                      maxLength={1024}
+                      required
+                      className={`${inputClass} pr-14`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmation((value) => !value)}
+                      aria-label={
+                        showConfirmation
+                          ? 'Sembunyikan konfirmasi kata sandi'
+                          : 'Tampilkan konfirmasi kata sandi'
+                      }
+                      aria-pressed={showConfirmation}
+                      aria-controls="confirm-password"
+                      className="absolute inset-y-0 right-1 mt-2 flex w-11 items-center justify-center rounded-lg text-slate-500 hover:text-genre-blue focus-visible:outline focus-visible:outline-2 focus-visible:outline-genre-blue"
+                    >
+                      {showConfirmation ? (
+                        <EyeOff className="h-5 w-5" aria-hidden="true" />
+                      ) : (
+                        <Eye className="h-5 w-5" aria-hidden="true" />
+                      )}
+                    </button>
+                  </div>
+                </div>
                 <p className="text-xs text-slate-500">
-                  Minimal 12 karakter. Jangan gunakan kata sandi Gmail Anda.
+                  Minimal 8 karakter. Jangan gunakan kata sandi Gmail Anda.
                 </p>
               </>
             )}
@@ -161,6 +202,11 @@ export default function AccountForm({
             </p>
           )}
         </form>
+        {mode === 'register' && (
+          <Link href="/verifikasi" className="mt-4 block text-sm font-bold text-genre-blue">
+            Kirim ulang verifikasi
+          </Link>
+        )}
         <Link href="/login" className="mt-6 inline-block text-sm font-bold text-genre-blue">
           Kembali ke login
         </Link>

@@ -7,7 +7,7 @@ export const gmailSchema = z
   .refine((value) => value.endsWith('@gmail.com'), 'Gunakan alamat @gmail.com.');
 export const passwordSchema = z
   .string()
-  .min(12, 'Kata sandi minimal 12 karakter.')
+  .min(8, 'Kata sandi minimal 8 karakter.')
   .max(INPUT_LIMITS.PASSWORD);
 export const registrationSchema = z
   .object({

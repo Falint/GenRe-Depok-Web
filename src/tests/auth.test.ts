@@ -31,6 +31,18 @@ test('registration accepts Gmail and matching strong portal passwords only', () 
     false,
   );
 });
+test('registration and password reset require at least eight characters', () => {
+  for (const password of ['Abcd123', 'Abcd1234']) {
+    const values = { password, confirmation: password };
+    const expected = password.length >= 8;
+    assert.equal(resetSchema.safeParse(values).success, expected);
+    assert.equal(
+      registrationSchema.safeParse({ ...values, nama_lengkap: 'Nama Uji', email: 'uji@gmail.com' })
+        .success,
+      expected,
+    );
+  }
+});
 test('destinations preserve internal links and isolate guests and admin management', () => {
   assert.equal(accountDestination('guest', '/administrasi'), '/publik');
   assert.equal(accountDestination('admin'), '/kelola-akun');

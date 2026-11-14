@@ -5,6 +5,29 @@ test.beforeEach(async ({ request }) => {
   await request.get(`${fixture}/__test/reset`);
 });
 
+test('signup password visibility toggles independently without changing values', async ({
+  page,
+}) => {
+  await page.goto('/daftar');
+  const password = page.getByLabel('Kata sandi', { exact: true });
+  const confirmation = page.getByLabel('Konfirmasi kata sandi', { exact: true });
+  await password.fill('new-strong-password');
+  await confirmation.fill('new-strong-password');
+  await expect(password).toHaveAttribute('type', 'password');
+  await expect(confirmation).toHaveAttribute('type', 'password');
+  await page.getByRole('button', { name: 'Tampilkan kata sandi', exact: true }).click();
+  await expect(password).toHaveAttribute('type', 'text');
+  await expect(confirmation).toHaveAttribute('type', 'password');
+  await page.getByRole('button', { name: 'Tampilkan konfirmasi kata sandi' }).click();
+  await expect(confirmation).toHaveAttribute('type', 'text');
+  await page.getByRole('button', { name: 'Sembunyikan kata sandi', exact: true }).click();
+  await page.getByRole('button', { name: 'Sembunyikan konfirmasi kata sandi' }).click();
+  await expect(password).toHaveAttribute('type', 'password');
+  await expect(confirmation).toHaveAttribute('type', 'password');
+  await expect(password).toHaveValue('new-strong-password');
+  await expect(confirmation).toHaveValue('new-strong-password');
+});
+
 test('Gmail signup, resend, recovery and verification errors are usable', async ({
   page,
   request,
@@ -12,15 +35,15 @@ test('Gmail signup, resend, recovery and verification errors are usable', async 
   await page.goto('/daftar');
   await page.getByLabel('Nama lengkap').fill('Pengurus Baru');
   await page.getByLabel('Gmail', { exact: true }).fill('baru@example.org');
-  await page.getByLabel('Kata sandi portal').fill('new-strong-password');
-  await page.getByLabel('Konfirmasi kata sandi').fill('new-strong-password');
+  await page.getByLabel('Kata sandi', { exact: true }).fill('new-strong-password');
+  await page.getByLabel('Konfirmasi kata sandi', { exact: true }).fill('new-strong-password');
   await page.getByRole('button', { name: 'Daftar dan kirim verifikasi' }).click();
   await expect(page.locator('main').getByRole('alert')).toContainText('@gmail.com');
   await page.getByLabel('Gmail', { exact: true }).fill('baru@gmail.com');
-  await page.getByLabel('Konfirmasi kata sandi').fill('other-strong-password');
+  await page.getByLabel('Konfirmasi kata sandi', { exact: true }).fill('other-strong-password');
   await page.getByRole('button', { name: 'Daftar dan kirim verifikasi' }).click();
   await expect(page.locator('main').getByRole('alert')).toContainText('tidak cocok');
-  await page.getByLabel('Konfirmasi kata sandi').fill('new-strong-password');
+  await page.getByLabel('Konfirmasi kata sandi', { exact: true }).fill('new-strong-password');
   await request.get(`${fixture}/__test/signup-ready?enabled=false`);
   await page.getByRole('button', { name: 'Daftar dan kirim verifikasi' }).click();
   await expect(page.locator('main').getByRole('alert')).toContainText('pembaruan database');
@@ -80,8 +103,8 @@ test('dedicated admin manages verified guest roles; inti cannot enter management
   await page.goto('/daftar');
   await page.getByLabel('Nama lengkap').fill('Pengurus Baru');
   await page.getByLabel('Gmail', { exact: true }).fill('baru@gmail.com');
-  await page.getByLabel('Kata sandi portal').fill('new-strong-password');
-  await page.getByLabel('Konfirmasi kata sandi').fill('new-strong-password');
+  await page.getByLabel('Kata sandi', { exact: true }).fill('new-strong-password');
+  await page.getByLabel('Konfirmasi kata sandi', { exact: true }).fill('new-strong-password');
   await page.getByRole('button', { name: 'Daftar dan kirim verifikasi' }).click();
   await expect(page.getByRole('status')).toBeVisible();
   await page.goto('/login');
@@ -115,8 +138,8 @@ test('password recovery exchanges token, updates password and requires a fresh l
   await page.goto('/auth/confirm?token_hash=fixture-recovery&type=recovery');
   await expect(page).toHaveURL(/\/reset-password$/);
   expect(new URL(page.url()).origin).toBe('http://127.0.0.1:3100');
-  await page.getByLabel('Kata sandi portal').fill('new-strong-password');
-  await page.getByLabel('Konfirmasi kata sandi').fill('new-strong-password');
+  await page.getByLabel('Kata sandi', { exact: true }).fill('new-strong-password');
+  await page.getByLabel('Konfirmasi kata sandi', { exact: true }).fill('new-strong-password');
   await page.getByRole('button', { name: 'Simpan kata sandi' }).click();
   await expect(page).toHaveURL(/\/login\?password=changed$/);
   await expect(page.getByRole('status')).toContainText('Kata sandi berubah');

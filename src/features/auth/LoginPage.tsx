@@ -173,7 +173,6 @@ export default function LoginPage({
             <div className="mt-5 flex flex-wrap justify-between gap-3 text-sm font-semibold text-genre-blue">
               <Link href="/daftar">Daftar akun</Link>
               <Link href="/lupa-password">Lupa kata sandi?</Link>
-              <Link href="/verifikasi">Kirim ulang verifikasi</Link>
             </div>
             <Link
               href="/publik"

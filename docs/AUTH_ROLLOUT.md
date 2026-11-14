@@ -8,7 +8,7 @@ Implementasi memakai email/password Supabase, bukan Google OAuth. Password porta
 2. Nonaktifkan pendaftaran publik selama rollout. Hentikan write sementara saat transisi role agar pekerjaan pending dapat ditinjau.
 3. Terapkan seluruh migration pendahulu yang belum diterapkan, lalu `202611130001_guest_accounts.sql`. Jangan menjalankan ulang baseline atau migration historis yang sudah diterapkan. Riwayat migration kosong bukan bukti schema belum tersedia.
 4. Atur `PORTAL_SITE_URL` pada server aplikasi ke origin kanonis, misalnya `https://portal.example.org`. Tidak boleh berisi path, query, atau kredensial. HTTP hanya untuk localhost/127.0.0.1. Atur juga Site URL dan redirect allowlist Supabase untuk development dan deploy yang benar. Jangan memakai wildcard domain produksi.
-5. Aktifkan provider email, **Confirm Email**, dan password minimum 12 karakter di Supabase. Google OAuth tidak diperlukan.
+5. Aktifkan provider email, **Confirm Email**, dan password minimum 8 karakter di Supabase. Google OAuth tidak diperlukan.
 6. Konfigurasikan custom SMTP, sender terverifikasi, dan rate limit email yang sesuai. SMTP bawaan Supabase bukan layanan pengiriman untuk pendaftaran umum. Kredensial SMTP hanya di Supabase, bukan pada bundle atau `NEXT_PUBLIC_*`.
 7. Template **Confirm signup**:
 
