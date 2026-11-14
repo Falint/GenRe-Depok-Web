@@ -239,6 +239,12 @@ test('staff can open secretary templates and use the PRIMERA brand kit', async (
     page.getByRole('heading', { name: 'Forum GenRe Kota Depok', exact: true }),
   ).toBeVisible();
   await expect(page.getByText('Kabinet PRIMERA · 2026–2028')).toBeVisible();
+  await expect(page.getByText('#EraBaruLebihSeru', { exact: true })).toBeVisible();
+  const logo = page.getByRole('img', { name: 'Logo PRIMERA', exact: true });
+  await expect(logo).toHaveAttribute('src', /logo-primera\.jpeg/);
+  await expect
+    .poll(() => logo.evaluate((image: HTMLImageElement) => image.naturalWidth))
+    .toBeGreaterThan(0);
   await page.screenshot({ path: testInfo.outputPath('primera-login.png'), fullPage: true });
   await login(page);
   await expect(page.getByText('Masa Bakti 2026–2028')).toBeVisible();
@@ -269,9 +275,7 @@ test('staff can open secretary templates and use the PRIMERA brand kit', async (
   }
   await page.screenshot({ path: testInfo.outputPath('secretary-templates.png'), fullPage: true });
   await page.getByRole('button', { name: 'Bank Aset & Brand Kit' }).click();
-  await expect(
-    page.getByText('Logo ini merupakan rancangan sementara', { exact: false }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Kabinet PRIMERA · PRIME ERA' })).toBeVisible();
   const palette = page.getByRole('region', { name: 'Palet PRIMERA', exact: true });
   for (const hex of ['#172E49', '#C5A15B', '#F4F1E9', '#4C8290']) {
     await expect(palette.getByText(hex, { exact: true })).toBeVisible();
@@ -282,8 +286,8 @@ test('staff can open secretary templates and use the PRIMERA brand kit', async (
     'https://drive.google.com/file/d/1Ixw95Z38p_ydEJvxElf_0maMmJpyua20/view?usp=sharing',
   );
   const downloaded = page.waitForEvent('download');
-  await page.getByRole('link', { name: 'Unduh logo sementara PRIMERA' }).click();
-  expect((await downloaded).suggestedFilename()).toBe('logo-primera-sementara.svg');
+  await page.getByRole('link', { name: 'Unduh logo PRIMERA' }).click();
+  expect((await downloaded).suggestedFilename()).toBe('logo-primera.jpeg');
   await page.screenshot({ path: testInfo.outputPath('primera-brand-kit.png'), fullPage: true });
   for (const width of [320, 640, 768, 1280]) {
     await page.setViewportSize({ width, height: 900 });

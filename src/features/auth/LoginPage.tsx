@@ -55,10 +55,10 @@ export default function LoginPage({
           <div className="relative my-16 max-w-lg lg:my-0">
             <Image
               src={KABINET.logoUrl}
-              alt="Logo sementara PRIMERA"
+              alt="Logo PRIMERA"
               width={72}
-              height={72}
-              className="mb-6"
+              height={40}
+              className="h-auto mb-6"
             />
             <p className="mb-3 text-sm font-bold text-primera-gold">
               Kabinet {KABINET.nama} · {KABINET.periode}

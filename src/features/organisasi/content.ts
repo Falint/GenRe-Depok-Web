@@ -1,9 +1,9 @@
 export const KABINET = {
   nama: 'PRIMERA',
   periode: '2026–2028',
-  tagline: 'Unity in Motion: Satu Gerak, Satu Tujuan, Bersama Berdampak',
+  tagline: '#EraBaruLebihSeru',
   nilai: ['Partnership', 'Respect', 'Inclusivity', 'Movement', 'Empowerment'],
-  logoUrl: '/logo-primera-sementara.svg',
+  logoUrl: '/logo-primera.jpeg',
   brandGuidelineUrl:
     'https://drive.google.com/file/d/1Ixw95Z38p_ydEJvxElf_0maMmJpyua20/view?usp=sharing',
   colorPalette: [

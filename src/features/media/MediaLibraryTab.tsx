@@ -204,10 +204,10 @@ export default function MediaLibraryTab() {
             <div className="flex items-center gap-4">
               <Image
                 src={KABINET.logoUrl}
-                alt="Logo sementara PRIMERA"
+                alt="Logo PRIMERA"
                 width={80}
-                height={80}
-                className="shrink-0"
+                height={44}
+                className="h-auto shrink-0"
               />
               <div>
                 <h2 id="brand-primera" className="text-lg font-bold">
@@ -217,18 +217,13 @@ export default function MediaLibraryTab() {
                 <p className="mt-2 text-sm leading-relaxed">{KABINET.tagline}</p>
               </div>
             </div>
-            <p className="mt-4 text-xs leading-relaxed text-slate-600">
-              Logo ini merupakan rancangan sementara berdasarkan filosofi kabinet, bukan logo resmi.
-              Bintang empat sudut melambangkan bimbingan dan visi, jarum emas melambangkan aksi,
-              lima bilah navy mewakili nilai PRIME, dan busur emas melambangkan kolaborasi.
-            </p>
             <div className="mt-4 flex flex-wrap gap-3">
               <a
                 href={KABINET.logoUrl}
                 download
                 className="inline-flex items-center gap-2 rounded-xl bg-primera-navy px-4 py-2 text-xs font-bold text-white hover:underline"
               >
-                <Download aria-hidden="true" className="h-4 w-4" /> Unduh logo sementara PRIMERA
+                <Download aria-hidden="true" className="h-4 w-4" /> Unduh logo PRIMERA
               </a>
               <a
                 href={KABINET.brandGuidelineUrl}

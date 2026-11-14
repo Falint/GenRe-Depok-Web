@@ -125,7 +125,13 @@ export default function Header({
       </div>
       <div className="border-t border-primera-gold/30 bg-primera-ivory text-primera-navy">
         <div className="mx-auto flex max-w-7xl items-center gap-2 px-4 py-2 sm:px-6 lg:px-8">
-          <Image src={KABINET.logoUrl} alt="Logo sementara PRIMERA" width={28} height={28} />
+          <Image
+            src={KABINET.logoUrl}
+            alt="Logo PRIMERA"
+            width={28}
+            height={15}
+            className="h-auto"
+          />
           <div className="min-w-0 flex-1">
             <p className="text-xs font-bold lg:hidden">Forum GenRe Kota Depok</p>
             <p className="text-[11px] sm:text-xs">

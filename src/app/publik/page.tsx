@@ -27,10 +27,11 @@ export default function PublicHome() {
         <div className="flex flex-col items-center justify-center gap-6 border-t border-white/15 p-8 md:border-l md:border-t-0">
           <Image
             src={KABINET.logoUrl}
-            alt="Logo sementara PRIMERA"
+            alt="Logo PRIMERA"
             width={180}
-            height={180}
+            height={99}
             priority
+            className="h-auto"
           />
           <p className="max-w-xs text-center text-sm leading-6 text-primera-ivory">
             {KABINET.tagline}

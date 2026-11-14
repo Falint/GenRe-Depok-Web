@@ -140,7 +140,13 @@ export default function DashboardTab() {
       {/* Role Banner & Dynamic Greeting */}
       <div className="relative overflow-hidden rounded-3xl bg-primera-navy p-6 sm:p-8 text-white shadow-xl shadow-blue-900/10">
         <div className="mb-5 flex items-center gap-3 border-b border-primera-gold/30 pb-5">
-          <Image src={KABINET.logoUrl} alt="Logo sementara PRIMERA" width={48} height={48} />
+          <Image
+            src={KABINET.logoUrl}
+            alt="Logo PRIMERA"
+            width={48}
+            height={26}
+            className="h-auto"
+          />
           <div>
             <p className="font-bold text-primera-gold">Kabinet {KABINET.nama}</p>
             <p className="mt-1 text-xs leading-relaxed text-primera-ivory">{KABINET.tagline}</p>

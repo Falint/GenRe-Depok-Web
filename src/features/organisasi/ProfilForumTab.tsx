@@ -60,7 +60,13 @@ export default function ProfilForumTab() {
 
         <div className="space-y-2 max-w-3xl">
           <div className="mb-4 flex items-center gap-3">
-            <Image src={KABINET.logoUrl} alt="Logo sementara PRIMERA" width={64} height={64} />
+            <Image
+              src={KABINET.logoUrl}
+              alt="Logo PRIMERA"
+              width={64}
+              height={35}
+              className="h-auto"
+            />
             <p className="text-sm font-bold text-primera-gold">
               Kabinet {KABINET.nama} · {KABINET.periode}
             </p>
