@@ -289,6 +289,7 @@ export default function PortalProvider({
           onOpenNotification={() => setModal({ type: 'notification' })}
         />
         <PortalNavigation
+          manageAccounts={profile.level === 'admin'}
           pathname={pathname}
           pendingBadges={pendingBadges}
           financeAdmin={financeAdmin}
@@ -317,6 +318,7 @@ export default function PortalProvider({
           {children}
         </main>
         <PortalNavigation
+          manageAccounts={profile.level === 'admin'}
           mobile
           pathname={pathname}
           pendingBadges={pendingBadges}

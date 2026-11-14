@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 
 async function login(page: Page) {
   await page.goto('/login');
-  await page.getByLabel('Email resmi').fill('pengurus@example.org');
+  await page.getByLabel('Email').fill('pengurus@example.org');
   await page.getByLabel('Kata sandi', { exact: true }).fill('valid-password');
   await page.getByRole('button', { name: 'Masuk ke portal' }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
@@ -16,12 +16,12 @@ test('protected routes redirect; login validates; missing URL returns 404', asyn
   await page.goto('/administrasi?from=link');
   await expect(page).toHaveURL(/\/login(?:\?|$)/);
   await page.getByRole('button', { name: 'Masuk ke portal' }).click();
-  await expect(page.getByRole('alert').filter({ hasText: 'Masukkan email resmi' })).toBeVisible();
-  await page.getByLabel('Email resmi').fill('pengurus@example.org');
+  await expect(page.getByRole('alert').filter({ hasText: 'Masukkan email' })).toBeVisible();
+  await page.getByLabel('Email').fill('pengurus@example.org');
   await page.getByLabel('Kata sandi', { exact: true }).fill('wrong-password');
   await page.getByRole('button', { name: 'Masuk ke portal' }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'Login gagal' })).toBeVisible();
-  await page.getByLabel('Email resmi').fill('pengurus@example.org');
+  await page.getByLabel('Email').fill('pengurus@example.org');
   await page.getByLabel('Kata sandi', { exact: true }).fill('valid-password');
   await page.getByRole('button', { name: 'Masuk ke portal' }).click();
   await expect(page).toHaveURL(/\/administrasi\?from=link$/);

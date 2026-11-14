@@ -27,6 +27,7 @@ export default defineConfig({
         NEXT_PUBLIC_SUPABASE_URL: 'http://127.0.0.1:54328',
         NEXT_PUBLIC_SUPABASE_ANON_KEY: 'sb_publishable_local_fixture',
         NEXT_TELEMETRY_DISABLED: '1',
+        PORTAL_SITE_URL: 'http://127.0.0.1:3100',
       },
     },
   ],

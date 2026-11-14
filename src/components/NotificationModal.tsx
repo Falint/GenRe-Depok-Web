@@ -1,4 +1,5 @@
 'use client';
+import { canViewAdminFinance } from '@/features/auth/permissions';
 import { formatDate } from '@/features/portal/mapping';
 import type { CurrentRole } from '@/features/auth/permissions';
 import type { PortalTab } from '@/features/portal/routes';
@@ -59,7 +60,7 @@ export default function NotificationModal({
         {/* Content Body */}
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto text-xs sm:text-sm">
           {/* Section: Pending Approvals for Leadership */}
-          {currentRole.level === 'inti' && (
+          {canViewAdminFinance(currentRole.level) && (
             <div className="space-y-2">
               <p className="text-[10px] font-extrabold uppercase tracking-wider text-amber-700 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200 flex items-center">
                 <AlertCircle className="w-3.5 h-3.5 mr-1" /> Membutuhkan Otorisasi / Tindakan Anda (

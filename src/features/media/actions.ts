@@ -1,5 +1,6 @@
 'use server';
 import { z } from 'zod';
+import { isPortalMember } from '@/features/auth/permissions';
 import { getProfile } from '@/features/auth/server';
 import { canManageContent, requirePermission } from '@/features/auth/permissions';
 import { createClient } from '@/lib/supabase/server';
@@ -17,7 +18,9 @@ import {
 
 export async function loadMedia(): Promise<Result<MediaResource[]>> {
   try {
-    if (!(await getProfile())) throw new PortalError('Silakan masuk kembali.');
+    const profile = await getProfile();
+    if (!profile || !isPortalMember(profile.level))
+      throw new PortalError('Akses pengurus diperlukan.');
     return { ok: true, data: await readRows(await createClient(), 'media_resources', mediaSchema) };
   } catch (error) {
     return { ok: false, error: safeError(error, 'media:load') };

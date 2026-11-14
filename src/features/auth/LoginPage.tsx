@@ -20,9 +20,13 @@ import { KABINET } from '@/features/organisasi/content';
 export default function LoginPage({
   configured,
   returnPath,
+  verified = false,
+  passwordChanged = false,
 }: {
   configured: boolean;
   returnPath: string;
+  verified?: boolean;
+  passwordChanged?: boolean;
 }) {
   const [showPassword, setShowPassword] = useState(false);
   const [result, action, loading] = useActionState(loginForm, null);
@@ -82,9 +86,19 @@ export default function LoginPage({
               Masuk ke akun Anda
             </h2>
             <p className="mt-3 text-sm leading-6 text-slate-500">
-              Gunakan email resmi yang terdaftar di Forum GenRe Kota Depok.
+              Gunakan Gmail terdaftar dan kata sandi khusus portal, bukan kata sandi Gmail.
             </p>
 
+            {verified && (
+              <p role="status" className="mt-4 text-sm text-emerald-700">
+                Gmail terverifikasi. Silakan masuk dengan kata sandi portal.
+              </p>
+            )}
+            {passwordChanged && (
+              <p role="status" className="mt-4 text-sm text-emerald-700">
+                Kata sandi berubah. Silakan masuk kembali.
+              </p>
+            )}
             {!configured && (
               <p role="alert" className="mt-4 text-sm text-rose-700">
                 Konfigurasi Supabase belum tersedia atau tidak valid. Hubungi administrator.
@@ -94,7 +108,7 @@ export default function LoginPage({
               <input type="hidden" name="next" value={returnPath} />
               <div>
                 <label className="mb-2 block text-sm font-bold text-slate-800" htmlFor="email">
-                  Email resmi
+                  Email
                 </label>
                 <div className="login-input-wrap">
                   <Mail className="h-4 w-4" aria-hidden="true" />
@@ -104,7 +118,7 @@ export default function LoginPage({
                     autoComplete="email"
                     name="email"
                     disabled={loading || !configured}
-                    placeholder="nama@genredepok.or.id"
+                    placeholder="nama@gmail.com"
                     className="login-input"
                   />
                 </div>
@@ -156,6 +170,11 @@ export default function LoginPage({
               </button>
             </form>
 
+            <div className="mt-5 flex flex-wrap justify-between gap-3 text-sm font-semibold text-genre-blue">
+              <Link href="/daftar">Daftar akun</Link>
+              <Link href="/lupa-password">Lupa kata sandi?</Link>
+              <Link href="/verifikasi">Kirim ulang verifikasi</Link>
+            </div>
             <Link
               href="/publik"
               className="mt-5 flex w-full items-center justify-center rounded-xl border-2 border-genre-blue px-4 py-3 text-sm font-bold text-genre-blue hover:bg-genre-blue-light focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4"
@@ -166,8 +185,7 @@ export default function LoginPage({
               Baca profil, berita, dan agenda tanpa akun.
             </p>
             <p className="mt-8 border-t border-slate-100 pt-5 text-xs leading-5 text-slate-500">
-              Akun dibuat oleh administrator Forum. Hubungi pengurus inti jika Anda belum memiliki
-              akses atau memerlukan bantuan akun.
+              Akun baru mendapat akses tamu. Administrator menetapkan jabatan dan akses pengurus.
             </p>
           </div>
         </section>

@@ -6,9 +6,7 @@ import type { Database } from '@/lib/supabase/database.types';
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
-  const publicPath =
-    request.nextUrl.pathname === '/publik' || request.nextUrl.pathname.startsWith('/publik/');
-  if (hasSupabaseConfig() && !publicPath) {
+  if (hasSupabaseConfig()) {
     const { url, key } = getSupabaseConfig();
     const client = createServerClient<Database>(url, key, {
       cookieOptions: { sameSite: 'lax', secure: url.startsWith('https:') },

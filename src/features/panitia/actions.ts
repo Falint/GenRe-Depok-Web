@@ -1,5 +1,6 @@
 'use server';
 import { z } from 'zod';
+import { isPortalMember } from '@/features/auth/permissions';
 import { getProfile } from '@/features/auth/server';
 import { requirePermission } from '@/features/auth/permissions';
 import { createClient } from '@/lib/supabase/server';
@@ -20,7 +21,9 @@ import {
 
 export async function loadPanitia(): Promise<Result<PanitiaData>> {
   try {
-    if (!(await getProfile())) throw new PortalError('Silakan masuk kembali.');
+    const profile = await getProfile();
+    if (!profile || !isPortalMember(profile.level))
+      throw new PortalError('Akses pengurus diperlukan.');
     const client = await createClient();
     const [requests, assignments, history, divisions, members] = await Promise.all([
       readRows(client, 'panitia_requests', requestSchema),
@@ -36,7 +39,9 @@ export async function loadPanitia(): Promise<Result<PanitiaData>> {
 }
 export async function createRequest(id: string, input: PanitiaInput) {
   return mutate('panitia:create', async (client, profile) => {
-    requirePermission(profile.level === 'kadiv' && !!profile.divisi_id);
+    requirePermission(
+      profile.level === 'admin' || (profile.level === 'kadiv' && !!profile.divisi_id),
+    );
     const values = parseInput(requestInput, input);
     if (Date.parse(values.deadline_respons) <= Date.now())
       throw new PortalError('Deadline respons harus di masa depan.');
@@ -80,9 +85,10 @@ async function requireTarget(
     .single();
   checkWrite(error);
   requirePermission(
-    profile.level === 'kadiv' &&
-      !!profile.divisi_id &&
-      profile.divisi_id === data?.divisi_tujuan_id,
+    profile.level === 'admin' ||
+      (profile.level === 'kadiv' &&
+        !!profile.divisi_id &&
+        profile.divisi_id === data?.divisi_tujuan_id),
   );
 }
 export async function decideRequest(input: z.infer<typeof decision>) {

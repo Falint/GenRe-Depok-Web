@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const ROLE_LEVELS = ['inti', 'kabid', 'kadiv', 'staff'] as const;
+export const ROLE_LEVELS = ['guest', 'admin', 'inti', 'kabid', 'kadiv', 'staff'] as const;
 export const roleLevelSchema = z.enum(ROLE_LEVELS);
 export const profileSchema = z.object({
   id: z.uuid(),
@@ -10,6 +10,7 @@ export const profileSchema = z.object({
   bidang_divisi: z.string(),
   kelompok: z.string(),
   level: roleLevelSchema,
+  access_version: z.number().int().nonnegative().optional(),
   bidang_id: z.string().nullable().optional(),
   divisi_id: z.string().nullable().optional(),
   avatar: z.string().nullable(),

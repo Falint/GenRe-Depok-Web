@@ -65,7 +65,7 @@ src/
 supabase/migrations/      # SQL hardening yang harus ditinjau dan diterapkan terpisah
 ```
 
-`/` mengalihkan ke `/login` atau `/dashboard`. Halaman portal internal: `/dashboard`, `/profil`, `/struktur`, `/administrasi`, `/komunikasi`, `/media`, dan `/konten-publik` (khusus inti/Branding). Halaman memerlukan user Supabase dan profil valid. Administrasi tersedia untuk inti/kabid; panel keuangan tetap khusus inti. Semua peran dapat mengajukan surat/reimburse dari dasbor. Parameter query pada deep link dipertahankan saat login; tujuan redirect dibatasi pada route portal sendiri.
+`/` mengalihkan pengunjung ke `/login`, guest ke `/publik`, pengurus ke `/dashboard`, dan admin ke `/kelola-akun`. Halaman portal internal: `/dashboard`, `/profil`, `/struktur`, `/administrasi`, `/komunikasi`, `/media`, `/konten-publik` (admin/inti/Branding), dan `/kelola-akun` (khusus admin). Portal internal memerlukan user Supabase dan profil pengurus/admin yang valid. Administrasi tersedia untuk admin/inti/kabid; panel keuangan khusus admin/inti. Semua pengurus dan admin dapat mengajukan surat/reimburse dari dasbor. Parameter query pada deep link dipertahankan saat login; tujuan redirect dibatasi pada route portal sendiri.
 
 ## Data, autentikasi, dan otorisasi
 
@@ -102,7 +102,7 @@ Untuk perubahan database berikutnya:
 3. Rekonsiliasi klaim dan ledger historis jika perubahan menyentuh pencairan. Klaim legacy berstatus cair tanpa ledger terkait memerlukan rekonsiliasi manual; migration tidak menebak hubungan transaksi historis.
 4. Uji tiap peran, login/logout, Realtime, seluruh write, dan transaksi historis sebelum rollout aplikasi dan database yang terkoordinasi.
 
-`seed_users.sh` adalah alat admin manual untuk proyek yang memang hendak diinisialisasi. Memerlukan `SUPABASE_URL`, `SERVICE_ROLE_KEY`, dan `SEED_INITIAL_PASSWORD` dari environment server. Akun baru diberi profil staff oleh trigger, lalu script mengisi peran lewat service role. Script tidak mereset akun existing dan tidak mencetak password. Jika pembuatan akun berhasil tetapi pengisian profil gagal, hentikan dan perbaiki profil lewat administrator; jangan membuat akun duplikat. Password bersama yang pernah berada dalam histori Git harus dianggap terekspos; pengelolaan kredensial existing dilakukan administrator, bukan migrasi ini.
+Pendaftaran Gmail, guest, dan admin khusus disiapkan melalui migration `202611130001_guest_accounts.sql`. Akun baru memerlukan verifikasi email dan password portal terpisah. `seed_users.sh` dinonaktifkan; akun buatan lama diturunkan melalui skrip transisi yang ditinjau pemilik. Ikuti [panduan aktivasi auth](docs/AUTH_ROLLOUT.md) sebelum membuka signup; ketersediaan fitur live bergantung pada migration dan konfigurasi SMTP.
 
 ## Verifikasi
 

@@ -25,6 +25,7 @@ export default function PanitiaTab() {
   const { currentRole } = usePortal();
   const { data, error, loading, refresh } = useFeatureData(loadPanitia, PANITIA_TABLES);
   const [creating, setCreating] = useState(false);
+  const [origin, setOrigin] = useState('');
   const [active, setActive] = useState<PanitiaRequest | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [reason, setReason] = useState('');
@@ -68,13 +69,15 @@ export default function PanitiaTab() {
           Ajukan kebutuhan ke divisi bidang lain. Kadiv tujuan menentukan anggota. Penugasan panitia
           terpisah dari absensi kegiatan.
         </p>
-        {currentRole.level === 'kadiv' && currentRole.divisiId && (
+        {(currentRole.level === 'admin' ||
+          (currentRole.level === 'kadiv' && currentRole.divisiId)) && (
           <button
             className={buttonClass}
             disabled={!data}
             onClick={() => {
               draftId.current = crypto.randomUUID();
               setMessage('');
+              setOrigin('');
               setCreating(true);
             }}
           >
@@ -125,8 +128,8 @@ export default function PanitiaTab() {
             .filter((a) => a.request_id === r.id)
             .sort((a, b) => a.nama.localeCompare(b.nama, 'id-ID'));
           const canProcess =
-            currentRole.level === 'kadiv' &&
-            currentRole.divisiId === r.divisi_tujuan_id &&
+            (currentRole.level === 'admin' ||
+              (currentRole.level === 'kadiv' && currentRole.divisiId === r.divisi_tujuan_id)) &&
             new Date(r.mulai_at).getTime() > now &&
             r.status !== 'rejected';
           return (
@@ -214,6 +217,9 @@ export default function PanitiaTab() {
                     judul: String(f.get('judul')),
                     deskripsi: String(f.get('deskripsi')),
                     divisi_tujuan_id: String(f.get('divisi')),
+                    ...(currentRole.level === 'admin'
+                      ? { divisi_asal_id: String(f.get('asal')) }
+                      : {}),
                     jumlah: Number(f.get('jumlah')),
                     deadline_respons: fromWib(String(f.get('deadline'))),
                     mulai_at: fromWib(String(f.get('mulai'))),
@@ -226,6 +232,27 @@ export default function PanitiaTab() {
                 Judul kebutuhan
                 <input name="judul" required maxLength={300} className={inputClass} />
               </label>
+              {currentRole.level === 'admin' && (
+                <label className="block text-sm">
+                  Divisi asal
+                  <select
+                    name="asal"
+                    required
+                    className={inputClass}
+                    value={origin}
+                    onChange={(e) => setOrigin(e.target.value)}
+                  >
+                    <option value="" disabled>
+                      Pilih divisi asal
+                    </option>
+                    {data?.divisions.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.nama}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <label className="block text-sm">
                 Divisi tujuan
                 <select name="divisi" required className={inputClass} defaultValue="">
@@ -233,7 +260,13 @@ export default function PanitiaTab() {
                     Pilih divisi bidang lain
                   </option>
                   {data?.divisions
-                    .filter((d) => d.bidang_id !== currentRole.bidangId)
+                    .filter(
+                      (d) =>
+                        d.bidang_id !==
+                        (currentRole.level === 'admin'
+                          ? data.divisions.find((item) => item.id === origin)?.bidang_id
+                          : currentRole.bidangId),
+                    )
                     .map((d) => {
                       const kadiv = data.members.find(
                         (m) => m.divisi_id === d.id && m.level === 'kadiv',

@@ -3,6 +3,11 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import type { Database } from '@/lib/supabase/database.types';
+import {
+  canViewAdminFinance,
+  isPortalMember,
+  requirePermission,
+} from '@/features/auth/permissions';
 import { PortalError } from '@/lib/errors';
 import { PORTAL_CONFIG, rowSchemas, type Profile } from './schema';
 import { mapFinance, mapPengumuman, mapReimburse, mapSurat, mapTiket } from './mapping';
@@ -17,6 +22,8 @@ export async function readRows<T>(
   const rows: T[] = [];
   for (;;) {
     let query = client.from(table).select(columns, { count: 'exact' });
+    // Guests are accounts, not members of the operational roster.
+    if (table === 'profiles') query = query.filter('level', 'neq', 'guest');
     for (const [column, value] of Object.entries(filters)) query = query.eq(column, value);
     const { data, count, error } = await query
       .order('id')
@@ -33,6 +40,7 @@ export async function readRows<T>(
 }
 
 export async function loadPortalData(profile: Profile) {
+  requirePermission(isPortalMember(profile.level));
   const client = await createClient();
   const [
     surat,
@@ -66,8 +74,10 @@ export async function loadPortalData(profile: Profile) {
       'id,nama_lengkap,jabatan,kelompok,avatar',
     ),
     readRows(client, 'tiket_info', rowSchemas.tiket_info),
-    profile.level === 'inti' ? readRows(client, 'kas_mutasi', rowSchemas.kas_mutasi) : [],
-    profile.level === 'inti' ? readRows(client, 'pagu_anggaran', rowSchemas.pagu_anggaran) : [],
+    canViewAdminFinance(profile.level) ? readRows(client, 'kas_mutasi', rowSchemas.kas_mutasi) : [],
+    canViewAdminFinance(profile.level)
+      ? readRows(client, 'pagu_anggaran', rowSchemas.pagu_anggaran)
+      : [],
     client.rpc('list_portal_budgets'),
   ]);
   if (budgetResult.error)

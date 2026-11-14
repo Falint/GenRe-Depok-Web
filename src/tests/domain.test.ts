@@ -52,13 +52,19 @@ const mutation = (
   dicatat_oleh_nama: 'Pengurus',
 });
 
-test('permission matrix uses profile.level for all four roles', () => {
+test('permission matrix uses profile.level for all roles', () => {
   for (const level of ROLE_LEVELS) {
-    assert.equal(canViewAdminFinance(level), level === 'inti');
-    assert.equal(canApproveOrConfirm(level), ['inti', 'kabid'].includes(level));
-    assert.equal(profileToRole({ ...profile, level }).isBendahara, level === 'inti');
-    assert.equal(canRespondToTicket({ id, level }, null), ['inti', 'kabid'].includes(level));
-    assert.equal(canRespondToTicket({ id, level }, id), true);
+    assert.equal(canViewAdminFinance(level), ['admin', 'inti'].includes(level));
+    assert.equal(canApproveOrConfirm(level), ['admin', 'inti', 'kabid'].includes(level));
+    assert.equal(
+      profileToRole({ ...profile, level }).isBendahara,
+      ['admin', 'inti'].includes(level),
+    );
+    assert.equal(
+      canRespondToTicket({ id, level }, null),
+      ['admin', 'inti', 'kabid'].includes(level),
+    );
+    assert.equal(canRespondToTicket({ id, level }, id), level !== 'guest');
   }
   assert.throws(() => requirePermission(false), PortalError);
 });
@@ -206,7 +212,7 @@ test('reimburse mapping hides missing and unsafe stored links without dropping t
 });
 test('external rows validate nullable fields, role and money before rendering', () => {
   assert.equal(rowSchemas.profiles.safeParse(profile).success, true);
-  assert.equal(rowSchemas.profiles.safeParse({ ...profile, level: 'admin' }).success, false);
+  assert.equal(rowSchemas.profiles.safeParse({ ...profile, level: 'owner' }).success, false);
   assert.equal(
     rowSchemas.kas_mutasi.safeParse(mutation('2026-11-03', Number.MAX_SAFE_INTEGER + 1)).success,
     false,

@@ -4,6 +4,7 @@ import { cache } from 'react';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { profileSchema } from '@/features/portal/schema';
+import { isPortalMember } from './permissions';
 import { PortalError } from '@/lib/errors';
 
 export const getProfile = cache(async () => {
@@ -34,5 +35,6 @@ export const getProfile = cache(async () => {
 export async function requireProfile() {
   const profile = await getProfile();
   if (!profile) redirect('/login');
+  if (!isPortalMember(profile.level)) redirect('/publik');
   return profile;
 }

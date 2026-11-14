@@ -109,7 +109,7 @@ export default function AdministrasiTab() {
     return matchSearch;
   });
 
-  const canApproveFinance = currentRole.level === 'inti';
+  const canApproveFinance = canViewAdminFinance(currentRole.level);
 
   return (
     <div className="space-y-6 pb-20 md:pb-6">

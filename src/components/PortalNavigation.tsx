@@ -16,14 +16,19 @@ export default function PortalNavigation({
   pendingBadges,
   financeAdmin,
   manageContent = false,
+  manageAccounts = false,
 }: {
   mobile?: boolean;
   pathname: string;
   pendingBadges: { administrasi: number; komunikasi: number };
   financeAdmin: boolean;
   manageContent?: boolean;
+  manageAccounts?: boolean;
 }) {
   const items = [
+    ...(manageAccounts
+      ? [{ href: PORTAL_ROUTES.kelolaAkun, label: 'Kelola akun', icon: Users, badge: 0 }]
+      : []),
     {
       href: PORTAL_ROUTES.dashboard,
       label: mobile ? 'Dasbor' : 'Dasbor',

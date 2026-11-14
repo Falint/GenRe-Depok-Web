@@ -4,10 +4,16 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { publicContentInput } from '../../features/publik/schema';
 import { MEDIA_LIBRARY } from '../../features/media/content';
+import { accessInput } from '../../features/auth/validation';
+import { roleLevelSchema } from '../../features/portal/schema';
 import type { Profile, RoleLevel } from '../../features/portal/schema';
 
 let userId = '00000000-0000-4000-8000-000000000001';
 let level: RoleLevel = 'inti';
+let fixturePassword = 'valid-password';
+let signupReady = true;
+let emailActions: string[] = [];
+let extraAccounts: Profile[] = [];
 let failReads = false;
 let loseCreationResponse = false;
 let failFeatures = false;
@@ -18,6 +24,7 @@ const fixtureId = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(1
 let rows: Record<string, Record<string, unknown>[]> = {};
 const profile = (): Profile => ({
   id: userId,
+  access_version: 0,
   email: 'pengurus@example.org',
   nama_lengkap: 'Pengurus Uji',
   jabatan: level === 'inti' ? 'Bendahara' : 'Staf',
@@ -96,7 +103,7 @@ function directory(): Profile[] {
       divisi_id: 'duta',
     },
   ];
-  return members
+  return [...members, ...extraAccounts]
     .map((p) =>
       p.id === userId
         ? { ...profile(), nama_lengkap: p.id === fixtureId(3) ? p.nama_lengkap : 'Pengurus Uji' }
@@ -113,6 +120,10 @@ function mayReadRequest(r: Record<string, unknown>, member = false) {
   );
 }
 function reset() {
+  signupReady = true;
+  fixturePassword = 'valid-password';
+  emailActions = [];
+  extraAccounts = [];
   placements = {};
   loseCreationResponse = false;
   rows = Object.fromEntries(
@@ -148,6 +159,11 @@ function reset() {
       terpakai: 7000,
       updated_at: null,
     },
+  ];
+  rows.bidang = [
+    { id: 'branding', nama: 'Bidang Branding' },
+    { id: 'internal', nama: 'Bidang Internal' },
+    { id: 'eksternal', nama: 'Bidang Eksternal' },
   ];
   rows.divisi = [
     { id: 'reguler', nama: 'Program Reguler', bidang_id: 'eksternal' },
@@ -227,9 +243,7 @@ createServer(async (request, response) => {
       field = url.searchParams.get('field') || 'branding';
       division = url.searchParams.get('division') || 'design';
       failFeatures = url.searchParams.get('features') === 'fail';
-      level = z
-        .enum(['inti', 'kabid', 'kadiv', 'staff'])
-        .parse(url.searchParams.get('level') || 'inti');
+      level = roleLevelSchema.parse(url.searchParams.get('level') || 'inti');
       failReads = url.searchParams.get('fail') === 'true';
       reset();
       return send(response, 200, {});
@@ -292,19 +306,50 @@ createServer(async (request, response) => {
       return send(response, 200, { claims: rows.reimburse.length, cash: rows.kas_mutasi.length });
     if (url.pathname === '/__test/actor') {
       userId = fixtureId(Number(url.searchParams.get('id') || '1'));
-      level = z
-        .enum(['inti', 'kabid', 'kadiv', 'staff'])
-        .parse(url.searchParams.get('level') || 'kadiv');
+      level = roleLevelSchema.parse(url.searchParams.get('level') || 'kadiv');
       field = url.searchParams.get('field') || 'branding';
       division = url.searchParams.get('division') || 'design';
       return send(response, 200, {});
     }
     if (request.method === 'OPTIONS') return send(response, 200, {});
+    if (url.pathname === '/__test/signup-ready') {
+      signupReady = url.searchParams.get('enabled') !== 'false';
+      return send(response, 200, {});
+    }
+    if (url.pathname === '/rest/v1/rpc/portal_signup_ready')
+      return send(response, signupReady ? 200 : 404, signupReady ? true : { code: 'PGRST202' });
+    if (url.pathname === '/__test/email-actions') return send(response, 200, emailActions);
+    if (url.pathname === '/auth/v1/signup') {
+      const input = z.object({ email: z.string() }).parse(await body(request));
+      if (typeof input.email !== 'string' || !input.email.endsWith('@gmail.com'))
+        return send(response, 400, { msg: 'Invalid email' });
+      emailActions.push('signup');
+      extraAccounts.push({
+        ...profile(),
+        id: fixtureId(800),
+        email: input.email,
+        level: 'guest',
+        jabatan: 'Tamu',
+        bidang_id: null,
+        divisi_id: null,
+      });
+      return send(response, 200, { ...user(), id: fixtureId(800), email: input.email });
+    }
+    if (url.pathname === '/auth/v1/resend' || url.pathname === '/auth/v1/recover') {
+      emailActions.push(url.pathname.endsWith('resend') ? 'resend' : 'recovery');
+      return send(response, 200, {});
+    }
+    if (url.pathname === '/auth/v1/verify') {
+      const input = z.object({ token_hash: z.string() }).parse(await body(request));
+      if (input.token_hash !== 'fixture-confirm' && input.token_hash !== 'fixture-recovery')
+        return send(response, 403, { msg: 'Token expired' });
+      return send(response, 200, session());
+    }
     if (url.pathname === '/auth/v1/token') {
       const values = z.object({ password: z.string() }).safeParse(await body(request));
       if (
         url.searchParams.get('grant_type') !== 'refresh_token' &&
-        (!values.success || values.data.password !== 'valid-password')
+        (!values.success || values.data.password !== fixturePassword)
       )
         return send(response, 400, {
           code: 'invalid_credentials',
@@ -315,6 +360,10 @@ createServer(async (request, response) => {
     if (url.pathname === '/auth/v1/user') {
       if (!request.headers.authorization?.startsWith('Bearer eyJ'))
         return send(response, 401, { message: 'Missing session' });
+      if (request.method === 'PUT') {
+        const input = z.object({ password: z.string() }).parse(await body(request));
+        fixturePassword = String(input.password);
+      }
       return send(response, 200, user());
     }
     if (url.pathname === '/auth/v1/logout') return send(response, 200, {});
@@ -323,6 +372,47 @@ createServer(async (request, response) => {
       return send(response, 401, { message: 'Unauthorized' });
     if (url.pathname.startsWith('/rest/v1/rpc/')) {
       const name = url.pathname.split('/').at(-1);
+      if (name === 'list_portal_accounts') {
+        if (level !== 'admin') return send(response, 403, { code: '42501' });
+        const input = z
+          .object({ search_text: z.string(), page_number: z.number() })
+          .parse(await body(request));
+        const query = String(input.search_text).toLowerCase();
+        return send(
+          response,
+          200,
+          directory()
+            .filter((p) => `${p.nama_lengkap} ${p.email}`.toLowerCase().includes(query))
+            .slice(Number(input.page_number) * 50, (Number(input.page_number) + 1) * 50)
+            .map((p) => ({ ...p, access_version: p.access_version ?? 0, email_confirmed: true })),
+        );
+      }
+      if (name === 'set_portal_account_access') {
+        if (level !== 'admin') return send(response, 403, { code: '42501' });
+        const input = z
+          .object({
+            target_id: z.string(),
+            expected_version: z.number(),
+            input: z.object({
+              level: accessInput.shape.level,
+              jabatan: accessInput.shape.jabatan,
+              bidang_id: accessInput.shape.bidang_id,
+              divisi_id: accessInput.shape.divisi_id,
+            }),
+          })
+          .parse(await body(request));
+        const previous = directory().find((p) => p.id === input.target_id);
+        if (!previous || previous.level === 'admin') return send(response, 403, { code: '42501' });
+        if ((previous.access_version ?? 0) !== input.expected_version)
+          return send(response, 409, { code: '40001' });
+        placements[String(input.target_id)] = {
+          ...input.input,
+          access_version: Number(input.expected_version) + 1,
+        };
+        return send(response, 200, null);
+      }
+      if (level === 'guest' && name !== 'list_portal_budgets')
+        return send(response, 403, { code: '42501' });
       const v = z.record(z.string(), z.unknown()).parse(await body(request));
       const input = z.record(z.string(), z.unknown()).parse(v.input || {});
       const now = new Date().toISOString();
@@ -645,9 +735,12 @@ createServer(async (request, response) => {
       if (table === 'media_resources')
         results = results.filter((r) => !r.archived_at || level === 'inti' || field === 'branding');
       if (table === 'content_history' && level !== 'inti' && field !== 'branding') results = [];
-      for (const [key, value] of url.searchParams.entries())
+      for (const [key, value] of url.searchParams.entries()) {
+        if (value.startsWith('neq.'))
+          results = results.filter((row) => Reflect.get(row, key) !== value.slice(4));
         if (value.startsWith('eq.'))
           results = results.filter((row) => Reflect.get(row, key) === value.slice(3));
+      }
       const offset = Number(url.searchParams.get('offset') || 0);
       const limit = Number(url.searchParams.get('limit') || results.length);
       response.setHeader(

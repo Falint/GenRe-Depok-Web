@@ -6,6 +6,7 @@ export const PORTAL_ROUTES = {
   komunikasi: '/komunikasi',
   media: '/media',
   kontenPublik: '/konten-publik',
+  kelolaAkun: '/kelola-akun',
 } as const;
 export type PortalTab = keyof typeof PORTAL_ROUTES;
 

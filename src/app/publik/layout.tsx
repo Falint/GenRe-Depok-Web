@@ -1,4 +1,7 @@
 import Image from 'next/image';
+import { getProfile } from '@/features/auth/server';
+import { accountDestination } from '@/features/auth/policy';
+import PublicAccount from '@/features/auth/PublicAccount';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { KABINET } from '@/features/organisasi/content';
@@ -8,7 +11,8 @@ export const metadata = {
   description: 'Profil, berita, agenda, dan informasi Forum GenRe Kota Depok.',
 };
 
-export default function PublicLayout({ children }: { children: ReactNode }) {
+export default async function PublicLayout({ children }: { children: ReactNode }) {
+  const profile = await getProfile();
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 [&_a]:focus-visible:outline [&_a]:focus-visible:outline-2 [&_a]:focus-visible:outline-offset-4 [&_a]:focus-visible:outline-genre-blue">
       <a
@@ -33,12 +37,10 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
               Kota Depok
             </span>
           </Link>
-          <Link
-            href="/login"
-            className="rounded-xl bg-primera-navy px-4 py-3 text-xs font-bold text-white sm:text-sm"
-          >
-            Masuk pengurus
-          </Link>
+          <PublicAccount
+            level={profile?.level ?? null}
+            destination={profile ? accountDestination(profile.level) : '/login'}
+          />
         </div>
         <nav
           aria-label="Navigasi publik"

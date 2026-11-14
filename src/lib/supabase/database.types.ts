@@ -19,6 +19,17 @@ type Table<T, Required extends keyof T> = {
 export type Database = {
   public: {
     Tables: {
+      account_access_history: Table<
+        {
+          id: string;
+          actor_id: string | null;
+          target_id: string;
+          before_profile: Record<string, unknown>;
+          after_profile: Record<string, unknown>;
+          created_at: string;
+        },
+        'target_id' | 'before_profile' | 'after_profile'
+      >;
       public_content: Table<
         z.infer<typeof publicContentSchema>,
         'id' | 'jenis' | 'judul' | 'ringkasan' | 'isi'
@@ -67,6 +78,15 @@ export type Database = {
     };
     Views: { [_ in never]: never };
     Functions: {
+      portal_signup_ready: { Args: Record<string, never>; Returns: boolean };
+      list_portal_accounts: {
+        Args: { search_text: string; page_number: number };
+        Returns: Record<string, unknown>[];
+      };
+      set_portal_account_access: {
+        Args: { target_id: string; expected_version: number; input: Record<string, unknown> };
+        Returns: undefined;
+      };
       save_portal_public_content: {
         Args: { target_id: string; expected_version: number; input: Record<string, unknown> };
         Returns: undefined;

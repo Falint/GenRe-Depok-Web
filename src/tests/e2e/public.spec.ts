@@ -5,7 +5,7 @@ const historicJobdesc =
 const fixture = 'http://127.0.0.1:54328';
 async function login(page: Page) {
   await page.goto('/login');
-  await page.getByLabel('Email resmi').fill('pengurus@example.org');
+  await page.getByLabel('Email').fill('pengurus@example.org');
   await page.getByLabel('Kata sandi', { exact: true }).fill('valid-password');
   await page.getByRole('button', { name: 'Masuk ke portal' }).click();
   await expect(page).toHaveURL(/\/dashboard$/);

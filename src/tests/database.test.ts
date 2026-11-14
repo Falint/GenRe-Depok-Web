@@ -1098,3 +1098,262 @@ test('public content RLS, publication, validation and concurrent edits preserve 
   assert.equal(competing.filter(Boolean).length, 1);
   assert.equal(sql(`SELECT version FROM public.public_content WHERE id='${id(510)}'`), '3');
 });
+
+test('Gmail signup, guest isolation, admin access and audited role changes', async () => {
+  // Auth's confirmation timestamp is managed by Supabase, not exposed through public profiles.
+  sql('ALTER TABLE auth.users ADD COLUMN email_confirmed_at timestamptz');
+  sql(
+    `INSERT INTO auth.users(id,email) VALUES('${id(910)}','legacy@genredepok.or.id'); UPDATE public.profiles SET bidang_id='branding',divisi_id='design' WHERE id='${id(910)}'`,
+  );
+  sql(readFileSync('supabase/migrations/202611130001_guest_accounts.sql', 'utf8'));
+  assert.equal(sql('SET ROLE anon; SELECT public.portal_signup_ready()').split('\n').at(-1), 't');
+  for (const value of [900, 901, 902, 903, 904]) {
+    sql(`INSERT INTO auth.users(id,email,email_confirmed_at,raw_user_meta_data)
+      VALUES('${id(value)}','auth${value}@gmail.com',${value === 902 ? 'NULL' : 'now()'},'{"nama_lengkap":"Auth Uji","level":"admin","bidang_id":"branding"}')`);
+    assert.equal(sql(`SELECT level FROM public.profiles WHERE id='${id(value)}'`), 'guest');
+  }
+  assert.throws(
+    () => sql(`INSERT INTO auth.users(id,email) VALUES('${id(909)}','fake@example.org')`),
+    /@gmail.com/,
+  );
+  assert.equal(sql(`SELECT count(*) FROM auth.users WHERE id='${id(909)}'`), '0');
+  sql(`UPDATE public.profiles SET level='admin',jabatan='Administrator' WHERE id='${id(900)}';
+    UPDATE public.profiles SET level='inti',jabatan='Ketua' WHERE id='${id(903)}';
+    UPDATE public.profiles SET level='staff',bidang_id='branding',divisi_id='design' WHERE id='${id(904)}'`);
+  const result = (actor: number, statement: string) =>
+    sql(asUser(actor, statement)).split('\n').at(-1);
+  for (const table of [
+    'surat',
+    'surat_approval',
+    'reimburse',
+    'reimburse_approval',
+    'kas_mutasi',
+    'pagu_anggaran',
+    'pengumuman',
+    'pengumuman_kehadiran',
+    'tiket_info',
+    'bidang',
+    'divisi',
+    'panitia_requests',
+    'panitia_assignments',
+    'panitia_history',
+    'media_resources',
+    'content_history',
+  ]) {
+    assert.equal(
+      result(901, `SELECT count(*) FROM public.${table}`),
+      '0',
+      `guest must not read ${table}`,
+    );
+    assert.equal(
+      sql(`SELECT has_table_privilege('authenticated','public.${table}','TRUNCATE')`),
+      'f',
+    );
+  }
+  assert.equal(result(901, 'SELECT count(*) FROM public.profiles'), '1');
+  assert.equal(result(904, `SELECT count(*) FROM public.profiles WHERE level='guest'`), '0');
+  assert.throws(
+    () => sql(asUser(901, "SELECT public.create_portal_reimburse(gen_random_uuid(),'{}')")),
+    /Permission denied/,
+  );
+  assert.throws(
+    () =>
+      sql(
+        asUser(901, "SELECT public.decide_portal_reimburse(gen_random_uuid(),'cancel','alasan')"),
+      ),
+    /Permission denied/,
+  );
+  assert.equal(result(901, 'SELECT count(*) FROM public.list_portal_budgets()'), '0');
+  assert.throws(
+    () =>
+      sql(
+        asUser(
+          901,
+          `INSERT INTO public.surat(nomor_surat,jenis,perihal,pemohon_id,pemohon_nama,divisi,tujuan) VALUES('DRAFT','Surat Tugas','Guest','${id(901)}','Auth Uji','-','Sekolah')`,
+        ),
+      ),
+    /row-level security/,
+  );
+  for (const actor of [901, 903, 904]) {
+    assert.throws(
+      () => sql(asUser(actor, "SELECT public.list_portal_accounts('',0)")),
+      /Permission denied/,
+    );
+    assert.throws(
+      () => sql(asUser(actor, `UPDATE public.profiles SET level='admin' WHERE id='${id(actor)}'`)),
+      /permission denied/i,
+    );
+  }
+  const access = (target: number, version: number, patch: Record<string, unknown> = {}) =>
+    `SELECT public.set_portal_account_access('${id(target)}',${version},'${JSON.stringify({ level: 'staff', jabatan: 'Staff Desain', bidang_id: 'branding', divisi_id: 'design', ...patch })}'::jsonb)`;
+  assert.throws(() => sql(asUser(903, access(901, 0))), /Permission denied/);
+  assert.throws(() => sql(asUser(900, access(902, 0))), /belum terverifikasi/);
+  assert.throws(() => sql(asUser(900, access(901, 0, { level: 'admin' }))), /Role atau jabatan/);
+  assert.throws(() => sql(asUser(900, access(900, 0))), /hanya diubah pemilik/);
+  assert.throws(() => sql(asUser(900, access(901, 0, { bidang_id: 'internal' }))), /tidak cocok/);
+  sql(asUser(900, access(901, 0)));
+  assert.equal(result(901, 'SELECT public.is_portal_member()'), 't');
+  assert.equal(sql(`SELECT access_version FROM public.profiles WHERE id='${id(901)}'`), '1');
+  assert.equal(
+    result(900, `SELECT count(*) FROM public.account_access_history WHERE target_id='${id(901)}'`),
+    '1',
+  );
+  assert.equal(result(904, 'SELECT count(*) FROM public.account_access_history'), '0');
+  assert.throws(() => sql(asUser(900, access(901, 0))), /Data berubah/);
+  // A stale concurrent edit must fail, rather than silently replacing another admin's decision.
+  const concurrent = await Promise.all([
+    concurrentSql(asUser(900, access(901, 1))),
+    concurrentSql(asUser(900, access(901, 1))),
+  ]);
+  assert.equal(concurrent.filter(Boolean).length, 1);
+  // Audit failure must roll back both the role and its version.
+  sql(`CREATE FUNCTION public.reject_access_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'Audit failed'; END; $$;
+    CREATE TRIGGER reject_access_audit BEFORE INSERT ON public.account_access_history FOR EACH ROW EXECUTE FUNCTION public.reject_access_audit()`);
+  assert.throws(
+    () => sql(asUser(900, access(901, 2, { level: 'guest', bidang_id: null, divisi_id: null }))),
+    /Audit failed/,
+  );
+  assert.equal(
+    sql(`SELECT level || ':' || access_version FROM public.profiles WHERE id='${id(901)}'`),
+    'staff:2',
+  );
+  sql('DROP TRIGGER reject_access_audit ON public.account_access_history');
+  sql(asUser(900, access(901, 2, { level: 'guest', bidang_id: null, divisi_id: null })));
+  assert.equal(result(901, 'SELECT count(*) FROM public.surat'), '0');
+  assert.equal(result(901, 'SELECT public.is_portal_member()'), 'f');
+  assert.throws(
+    () => sql(asUser(901, "SELECT public.create_panitia_request(gen_random_uuid(),'{}')")),
+    /Permission denied/,
+  );
+
+  // Dedicated admin inherits finance/approval and content permissions without an organization placement.
+  sql(
+    `INSERT INTO public.pagu_anggaran(id,bidang,pagu,tahun_anggaran) VALUES('${id(920)}','Auth test',100000,extract(year from now() AT TIME ZONE 'Asia/Jakarta'))`,
+  );
+  const claim = JSON.stringify({
+    proker: 'Auth test',
+    nominal: 100,
+    keterangan: '',
+    bank: 'Bank',
+    rekening: '1',
+    pagu_anggaran_id: id(920),
+  });
+  sql(asUser(900, `SELECT public.create_portal_reimburse('${id(921)}','${claim}')`));
+  sql(asUser(900, `SELECT public.disburse_portal_reimburse('${id(921)}')`));
+  assert.equal(
+    result(900, `SELECT count(*) FROM public.kas_mutasi WHERE reimburse_id='${id(921)}'`),
+    '1',
+  );
+  sql(
+    `INSERT INTO public.surat(id,nomor_surat,jenis,perihal,pemohon_nama,divisi,tujuan) VALUES('${id(922)}','DRAFT','Surat Tugas','Admin','Auth Uji','-','Sekolah')`,
+  );
+  sql(asUser(900, `SELECT public.approve_portal_surat('${id(922)}')`));
+  assert.equal(
+    sql(`SELECT status FROM public.surat WHERE id='${id(922)}'`),
+    'Selesai / Terbit (QR ACC)',
+  );
+  const content = JSON.stringify({
+    jenis: 'berita',
+    judul: 'Auth published',
+    ringkasan: 'Ringkasan',
+    isi: 'Isi',
+    status: 'published',
+    mulai_at: null,
+    selesai_at: null,
+    lokasi: '',
+  });
+  sql(asUser(900, `SELECT public.save_portal_public_content('${id(923)}',-1,'${content}')`));
+  assert.equal(
+    result(901, `SELECT count(*) FROM public.public_content WHERE id='${id(923)}'`),
+    '1',
+  );
+  assert.throws(
+    () =>
+      sql(asUser(901, `SELECT public.save_portal_public_content('${id(924)}',-1,'${content}')`)),
+    /Permission denied/,
+  );
+  assert.equal(result(901, "SELECT count(*) FROM public.public_content WHERE status='draft'"), '0');
+
+  sql(`UPDATE public.profiles SET level='staff' WHERE level='kadiv' AND divisi_id='design';
+    INSERT INTO auth.users(id,email,email_confirmed_at) VALUES('${id(905)}','kadiv905@gmail.com',now());
+    UPDATE public.profiles SET level='kadiv',bidang_id='branding',divisi_id='design' WHERE id='${id(905)}'`);
+  assert.throws(() => sql(asUser(900, access(901, 3, { level: 'kadiv' }))), /duplicate key/);
+  const request = JSON.stringify({
+    judul: 'Admin panitia',
+    deskripsi: 'Tugas',
+    divisi_asal_id: 'reguler',
+    divisi_tujuan_id: 'design',
+    jumlah: 1,
+    deadline_respons: '2099-01-01T00:00:00Z',
+    mulai_at: '2099-01-02T00:00:00Z',
+    selesai_at: '2099-01-03T00:00:00Z',
+  });
+  sql(asUser(900, `SELECT public.create_panitia_request('${id(925)}','${request}')`));
+  sql(asUser(900, `SELECT public.decide_panitia_request('${id(925)}',0,true,'Admin review')`));
+  sql(
+    asUser(
+      900,
+      `SELECT public.set_panitia_assignments('${id(925)}',1,ARRAY['${id(904)}']::uuid[],'Admin assignment')`,
+    ),
+  );
+  assert.equal(sql(`SELECT status FROM public.panitia_requests WHERE id='${id(925)}'`), 'assigned');
+  const changedOrigin = request.replace('"reguler"', '"kecamatan"');
+  assert.throws(
+    () => sql(asUser(900, `SELECT public.create_panitia_request('${id(925)}','${changedOrigin}')`)),
+    /Pengajuan berubah/,
+  );
+  // Legacy ownership/assignment does not survive demotion as an authorization grant.
+  sql(asUser(900, access(904, 0, { level: 'guest', bidang_id: null, divisi_id: null })));
+  assert.equal(result(904, 'SELECT count(*) FROM public.panitia_assignments'), '0');
+  assert.equal(result(904, `SELECT public.can_read_panitia('${id(925)}',true)`), 'f');
+  assert.throws(
+    () => sql(asUser(904, `SELECT public.set_tiket_deadline('${id(1)}',NULL)`)),
+    /Permission denied/,
+  );
+  sql(`UPDATE auth.users SET email='auth901changed@gmail.com' WHERE id='${id(901)}'`);
+  assert.equal(
+    sql(`SELECT email FROM public.profiles WHERE id='${id(901)}'`),
+    'auth901changed@gmail.com',
+  );
+  assert.throws(
+    () => sql(`UPDATE auth.users SET email='fake@example.org' WHERE id='${id(901)}'`),
+    /@gmail.com/,
+  );
+});
+
+test('owner bootstrap and legacy cutover require explicit reviewed accounts and preserve history', () => {
+  const bootstrap = readFileSync('supabase/admin/bootstrap_portal_admin.sql', 'utf8');
+  assert.throws(() => sql(bootstrap), /Isi UUID/);
+  const selected = bootstrap.replace('target uuid := NULL', `target uuid := '${id(902)}'`);
+  assert.throws(() => sql(selected), /Gmail terverifikasi/);
+  sql(`UPDATE auth.users SET email_confirmed_at=now() WHERE id='${id(902)}'`);
+  sql(selected);
+  assert.equal(sql(`SELECT level FROM public.profiles WHERE id='${id(902)}'`), 'admin');
+  const cutover = readFileSync('supabase/admin/legacy_guest_cutover.sql', 'utf8');
+  assert.throws(() => sql(cutover), /masih kosong/);
+  const reviewed = cutover.replace(
+    "-- INSERT INTO reviewed_legacy_accounts VALUES ('reviewed-uuid-here');",
+    `INSERT INTO reviewed_legacy_accounts VALUES ('${id(910)}');`,
+  );
+  const before = sql(`SELECT row_to_json(p) FROM public.profiles p WHERE id='${id(910)}'`);
+  const letters = sql('SELECT count(*) FROM public.surat');
+  sql(reviewed);
+  assert.equal(
+    sql(
+      `SELECT level || ':' || coalesce(divisi_id,'none') FROM public.profiles WHERE id='${id(910)}'`,
+    ),
+    'guest:none',
+  );
+  assert.deepEqual(
+    JSON.parse(
+      sql(`SELECT before_profile FROM public.legacy_account_access_snapshot WHERE id='${id(910)}'`),
+    ),
+    JSON.parse(before),
+  );
+  assert.equal(sql('SELECT count(*) FROM public.surat'), letters);
+  assert.throws(
+    () => sql(asUser(900, 'SELECT * FROM public.legacy_account_access_snapshot')),
+    /permission denied/i,
+  );
+  assert.throws(() => sql(reviewed), /belum diturunkan/);
+});

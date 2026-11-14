@@ -1,10 +1,11 @@
 import { z } from 'zod';
+import { roleLevelSchema } from '@/features/portal/schema';
 
 export const divisionSchema = z.object({ id: z.string(), nama: z.string(), bidang_id: z.string() });
 export const memberSchema = z.object({
   id: z.uuid(),
   nama_lengkap: z.string(),
-  level: z.enum(['inti', 'kabid', 'kadiv', 'staff']),
+  level: roleLevelSchema,
   bidang_id: z.string().nullable(),
   divisi_id: z.string().nullable(),
 });
@@ -52,6 +53,7 @@ export const requestInput = z
     judul: z.string().trim().min(1).max(300),
     deskripsi: z.string().trim().min(1).max(10000),
     divisi_tujuan_id: z.string().min(1).max(100),
+    divisi_asal_id: z.string().min(1).max(100).optional(),
     jumlah: z.number().int().min(1).max(1000),
     deadline_respons: z.iso.datetime(),
     mulai_at: z.iso.datetime(),

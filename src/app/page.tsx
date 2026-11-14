@@ -1,5 +1,7 @@
 import { redirect } from 'next/navigation';
+import { accountDestination } from '@/features/auth/policy';
 import { getProfile } from '@/features/auth/server';
 export default async function Home() {
-  redirect((await getProfile()) ? '/dashboard' : '/login');
+  const profile = await getProfile();
+  redirect(profile ? accountDestination(profile.level) : '/login');
 }
