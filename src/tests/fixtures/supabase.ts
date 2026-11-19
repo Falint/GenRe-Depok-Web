@@ -380,9 +380,14 @@ createServer(async (request, response) => {
       if (name === 'create_portal_surat') {
         if (!['inti', 'admin', 'kabid'].includes(level))
           return send(response, 403, { code: '42501' });
-        const { request_id, input } = z
-          .object({ request_id: z.uuid(), input: suratInput.omit({ request_id: true }) })
+        const payload = z
+          .object({ request_id: z.uuid(), input: z.record(z.string(), z.unknown()) })
+          .strict()
           .parse(await body(request));
+        const { request_id, ...input } = suratInput.parse({
+          ...payload.input,
+          request_id: payload.request_id,
+        });
         const previous = rows.surat.find((r) => r.id === request_id);
         if (previous) {
           if (

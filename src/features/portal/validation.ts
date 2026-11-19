@@ -27,9 +27,25 @@ export const suratInput = z
     perihal: title,
     tujuan: shortText,
     urgensi: z.enum(['Rendah', 'Sedang', 'Tinggi']),
-    keterangan: note,
+    keterangan: text,
+    tanggal_kegiatan: z.iso.date().or(z.literal('')),
+    waktu_kegiatan: z.string().trim().max(INPUT_LIMITS.SHORT_TEXT),
+    tempat_kegiatan: z.string().trim().max(INPUT_LIMITS.SHORT_TEXT),
+    sistem_pelaksanaan: z.string().trim().max(INPUT_LIMITS.SHORT_TEXT),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (value.jenis === 'Surat Tugas' || value.jenis === 'Surat Undangan') {
+      for (const field of ['tanggal_kegiatan', 'waktu_kegiatan', 'tempat_kegiatan'] as const) {
+        if (!value[field])
+          context.addIssue({
+            code: 'custom',
+            path: [field],
+            message: 'Wajib diisi untuk jenis surat ini.',
+          });
+      }
+    }
+  });
 export const driveFileUrl = z
   .string()
   .trim()

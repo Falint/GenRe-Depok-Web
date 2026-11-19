@@ -1,14 +1,19 @@
 'use client';
 import Image from 'next/image';
-import logoDepok from '../../public/logo-depok.png';
-import logoDp3ap2kb from '../../public/logo-dp3ap2kb.png';
-import logoSalamGenre from '../../public/logo-salam-genre.png';
 import logoGenreDepok from '../../public/logo-genre-depok.png';
 import type { Surat } from '@/features/portal/mapping';
 import Dialog from './Dialog';
 import React from 'react';
-import { X, Download, CheckCircle, QrCode } from 'lucide-react';
-import { KABINET } from '@/features/organisasi/content';
+import { X, Download, CheckCircle } from 'lucide-react';
+
+import {
+  SURAT_OPENING,
+  SURAT_SCHEDULE_INTRO,
+  SURAT_SIGNATORIES,
+  isSuratApproved,
+  suratSchedule,
+  suratClosing,
+} from '@/features/administrasi/suratTemplate';
 
 export default function SuratPreviewModal({
   surat,
@@ -28,6 +33,8 @@ export default function SuratPreviewModal({
   busy?: boolean;
 }) {
   if (!surat) return null;
+  const approved = isSuratApproved(surat.status);
+  const schedule = suratSchedule(surat);
   const fileUrl =
     surat.file_pdf_url && URL.canParse(surat.file_pdf_url) ? new URL(surat.file_pdf_url) : null;
   const resultUrl =
@@ -48,7 +55,7 @@ export default function SuratPreviewModal({
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {surat.status.includes('Selesai') && (
+            {approved && (
               <a
                 href={`/surat/${surat.id}/pdf`}
                 download
@@ -74,6 +81,14 @@ export default function SuratPreviewModal({
             aria-label="Riwayat dan hasil surat"
             className="mb-4 max-w-2xl mx-auto rounded-2xl border border-slate-200 bg-white p-4 text-sm"
           >
+            <p className="mb-2 text-xs text-slate-500">
+              ID: {surat.id} · Pemohon: {surat.pemohon}
+            </p>
+            {!approved && (
+              <p className="mb-2 text-xs text-amber-700">
+                Menunggu persetujuan. Tanda tangan muncul setelah ACC.
+              </p>
+            )}
             <details>
               <summary className="cursor-pointer font-bold text-slate-900">
                 Riwayat Persetujuan
@@ -106,12 +121,12 @@ export default function SuratPreviewModal({
               </a>
             ) : (
               <p className="mt-3 text-xs text-slate-500">
-                {surat.status.includes('Selesai')
+                {approved
                   ? 'Surat tersimpan di portal. Gunakan Unduh PDF untuk menyimpan salinan ke perangkat.'
                   : 'Surat tersimpan di portal. PDF dapat diunduh setelah disetujui.'}
               </p>
             )}
-            {surat.status.includes('Selesai') && !resultUrl && (
+            {approved && !resultUrl && (
               <div className="mt-3 space-y-2">
                 <p className="text-xs text-slate-600">
                   Google Drive opsional; hanya dipakai jika pengurus memilih menyimpan salinan ke
@@ -140,158 +155,114 @@ export default function SuratPreviewModal({
               </div>
             )}
           </section>
-          <div className="bg-white shadow-md rounded-2xl p-6 sm:p-10 border border-slate-300 max-w-2xl mx-auto text-slate-800 text-xs sm:text-sm leading-relaxed">
-            {/* Kop Surat Resmi dengan 4 Logo Otentik */}
-            <div className="border-b-4 border-double border-slate-900 pb-4 mb-6">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center space-x-1.5 shrink-0">
-                  <Image
-                    sizes="128px"
-                    src={logoDepok}
-                    alt="Pemkot Depok"
-                    className="h-14 w-auto object-contain"
-                  />
-                  <Image
-                    sizes="128px"
-                    src={logoDp3ap2kb}
-                    alt="DP3AP2KB"
-                    className="h-9 w-auto object-contain hidden sm:block"
-                  />
-                </div>
-
-                <div className="text-center px-1 flex-1">
-                  <p className="text-[9px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-700">
-                    Pemerintah Kota Depok • Dinas DP3AP2KB
-                  </p>
-                  <h4 className="font-black text-xs sm:text-sm tracking-wide uppercase text-genre-blue-dark">
-                    FORUM GENERASI BERENCANA (GENRE) KOTA DEPOK
-                  </h4>
-                  <p className="text-[9px] text-slate-600 font-medium">
-                    Sekretariat: Gedung Dibaleka II Balai Kota Depok Jl. Margonda Raya No. 54
-                  </p>
-                  <p className="text-[8px] sm:text-[9px] text-slate-500 font-mono">
-                    SK Walikota Depok No. 100.3.3.3/61/Kpts/DP3AP2KB/Huk/2026
-                  </p>
-                </div>
-
-                <div className="flex items-center space-x-1.5 shrink-0">
-                  <Image
-                    sizes="128px"
-                    src={logoSalamGenre}
-                    alt="Salam GenRe"
-                    className="h-11 w-auto object-contain hidden sm:block"
-                  />
-                  <Image
-                    sizes="128px"
-                    src={logoGenreDepok}
-                    alt="Logo GenRe Depok"
-                    className="h-14 w-auto object-contain"
-                  />
-                </div>
-              </div>
-            </div>
+          <article
+            aria-label="Isi surat"
+            className="relative isolate bg-white shadow-md p-5 sm:p-10 border border-slate-300 max-w-2xl mx-auto text-black text-xs sm:text-sm leading-relaxed break-words"
+            style={{ fontFamily: '"Times New Roman", Times, serif' }}
+          >
+            <Image
+              src={logoGenreDepok}
+              alt=""
+              aria-hidden="true"
+              sizes="400px"
+              className="pointer-events-none absolute -z-10 top-1/3 left-[15%] w-[70%] h-auto opacity-10"
+            />
+            {/* Kop Surat Resmi mengikuti referensi organisasi. */}
+            <header className="border-b-4 border-double border-black pb-3 mb-5 text-center">
+              <Image
+                src={logoGenreDepok}
+                alt="Logo GenRe Depok"
+                sizes="80px"
+                className="h-20 w-auto object-contain mx-auto mb-2"
+              />
+              <h4 className="font-bold text-sm sm:text-base">
+                PENGURUS GENRE CABANG
+                <br />
+                FORUM GENERASI BERENCANA KOTA DEPOK
+              </h4>
+              <p className="text-[10px] sm:text-xs mt-1 font-sans">
+                IG : @genre_kotadepok, Email : genre.depok@gmail.com
+              </p>
+            </header>
 
             {/* Nomor & Tanggal */}
             <div className="flex flex-col sm:flex-row gap-3 justify-between items-start mb-6">
-              <div>
-                <table className="text-left text-xs table-fixed w-full">
-                  <tbody>
-                    <tr>
-                      <td className="pr-2 font-semibold">Nomor</td>
-                      <td className="pr-2">:</td>
-                      <td className="font-mono font-bold text-slate-900 break-all max-w-full">
-                        {surat.nomor}
-                      </td>
+              <table className="text-left min-w-0">
+                <tbody>
+                  {[
+                    ['Nomor', surat.nomor],
+                    ['Lampiran', '-'],
+                    ['Perihal', surat.perihal],
+                  ].map(([label, value]) => (
+                    <tr key={label}>
+                      <td className="pr-2 align-top">{label}</td>
+                      <td className="pr-2 align-top">:</td>
+                      <td className={label === 'Perihal' ? 'font-bold' : 'break-all'}>{value}</td>
                     </tr>
-                    <tr>
-                      <td className="pr-2 font-semibold">Lampiran</td>
-                      <td className="pr-2">:</td>
-                      <td>- (Satu Berkas)</td>
-                    </tr>
-                    <tr>
-                      <td className="pr-2 font-semibold">Perihal</td>
-                      <td className="pr-2">:</td>
-                      <td className="font-bold underline text-genre-blue-dark">
-                        {surat.jenis}: {surat.perihal}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <div className="text-right text-xs break-all">
-                <p>Kota Depok, {surat.tanggal}</p>
-                <p className="text-slate-500 font-mono text-[10px]">ID: {surat.id}</p>
-              </div>
+                  ))}
+                </tbody>
+              </table>
+              <p className="shrink-0">Depok, {surat.tanggal}</p>
             </div>
 
             {/* Tujuan */}
             <div className="mb-6">
-              <p className="font-semibold">Kepada Yth,</p>
-              <p className="font-bold text-slate-900">{surat.tujuan}</p>
-              <p className="text-slate-600">di Tempat</p>
+              <p>Kepada Yth.</p>
+              <p className="font-bold">{surat.tujuan}</p>
+              <p>di Tempat</p>
             </div>
 
             {/* Isi Surat */}
-            <div className="space-y-3 text-justify mb-8">
-              <p>Dengan hormat,</p>
-              <p>
-                Salam Generasi Berencana! Teriring salam dan doa semoga Bapak/Ibu senantiasa dalam
-                lindungan Tuhan Yang Maha Esa dan dilancarkan dalam menjalankan aktivitas
-                sehari-hari.
-              </p>
-              <p>
-                Sehubungan dengan pelaksanaan program kerja Forum GenRe Kota Depok masa bakti{' '}
-                {KABINET.periode}, dengan ini kami sampaikan bahwa:
-              </p>
-              <div className="bg-slate-50 p-3.5 rounded-xl border-l-4 border-genre-orange my-2 text-slate-700 italic">
-                &quot;{surat.keterangan}&quot;
-              </div>
-              <p>
-                Demikian surat {surat.jenis.toLowerCase()} ini kami sampaikan. Atas perhatian,
-                dukungan, dan kerja sama yang baik, kami ucapkan terima kasih.
-              </p>
-            </div>
-
-            {/* Tanda Tangan & QR Code Verifikasi */}
-            <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-200 items-end">
+            <div className="space-y-3 text-justify mb-5">
               <div>
-                <p className="text-[10px] text-slate-500 mb-1">Diajukan Oleh:</p>
-                <p className="font-bold text-xs">{surat.pemohon}</p>
-                <p className="text-[10px] text-slate-500">{surat.divisi}</p>
+                <p>Dengan hormat,</p>
+                <p className="indent-6">{SURAT_OPENING}</p>
               </div>
-
-              <div className="text-right">
-                <p className="text-[10px] text-slate-600">Mengetahui & Menyetujui,</p>
-                <p className="font-bold text-xs text-slate-900 mb-2">
-                  Ketua Umum Forum GenRe Kota Depok
-                </p>
-
-                {/* Digital Signature QR Code Badge */}
-                {surat.status.includes('Selesai') ? (
-                  <div className="inline-flex items-center space-x-2 bg-emerald-50 border border-emerald-300 rounded-xl p-2 text-left">
-                    <div className="w-10 h-10 bg-slate-900 rounded-lg p-1 flex items-center justify-center text-white">
-                      <QrCode className="w-8 h-8 text-white" />
-                    </div>
-                    <div>
-                      <p className="text-[9px] font-bold text-emerald-800 flex items-center">
-                        <CheckCircle className="w-3 h-3 mr-0.5 inline" /> DISETUJUI DI PORTAL
-                      </p>
-                      <p className="text-[8px] font-mono text-slate-600 font-bold">
-                        Muhammad Ighasta Mughis
-                      </p>
-                      <p className="text-[7px] text-slate-400">QR verifikasi belum tersedia</p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="h-14 flex items-center justify-end">
-                    <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200">
-                      Menunggu Tanda Tangan / ACC
-                    </span>
-                  </div>
-                )}
-              </div>
+              {surat.keterangan && (
+                <p className="indent-6 whitespace-pre-line">{surat.keterangan}</p>
+              )}
+              {schedule.length > 0 && (
+                <div>
+                  <p className="indent-6 mb-2">{SURAT_SCHEDULE_INTRO}</p>
+                  <table className="ml-2 sm:ml-6 text-left">
+                    <tbody>
+                      {schedule.map(([label, value]) => (
+                        <tr key={label}>
+                          <td className="pr-2 align-top">{label}</td>
+                          <td className="pr-2 align-top">:</td>
+                          <td className="whitespace-pre-line">{value}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <p className="indent-6">{suratClosing(surat.jenis)}</p>
             </div>
-          </div>
+
+            {/* Tanda Tangan hanya tersedia setelah persetujuan. */}
+            {approved && (
+              <section aria-label="Tanda tangan persetujuan" className="mt-4 text-center">
+                <p className="mb-2">Hormat Kami,</p>
+                <div className="grid grid-cols-2 gap-3">
+                  {SURAT_SIGNATORIES.map((signer) => (
+                    <div key={signer.key} className="min-w-0">
+                      <p className="font-bold h-12 sm:h-10">{signer.role}</p>
+                      <Image
+                        unoptimized
+                        src={`/surat/${surat.id}/tanda-tangan/${signer.key}`}
+                        alt={`Tanda tangan ${signer.role}`}
+                        width={180}
+                        height={90}
+                        className="w-full h-20 sm:h-24 object-contain mx-auto"
+                      />
+                      <p className="font-bold underline">{signer.name}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+          </article>
         </div>
 
         {/* Modal Footer & ACC Action */}
@@ -301,7 +272,7 @@ export default function SuratPreviewModal({
           </div>
 
           <div className="flex items-center space-x-3">
-            {canApprove && !surat.status.includes('Selesai') && (
+            {canApprove && !approved && (
               <button
                 onClick={() => onApprove(surat.id)}
                 className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md shadow-emerald-600/20 transition-all flex items-center space-x-1.5"

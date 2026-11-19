@@ -1610,3 +1610,139 @@ test('Drive configuration and export leases enforce permissions, approval and st
   );
   assert.notEqual(expired.claim_id, recovered.claim_id);
 });
+
+test('surat template migration preserves legacy data and validates event fields and retries', () => {
+  const snapshot = () =>
+    sql(
+      'SELECT json_agg(json_build_array(id,nomor_surat,keterangan,status,tanggal,file_pdf_url) ORDER BY id) FROM public.surat',
+    );
+  const before = snapshot();
+  const migration = readFileSync('supabase/migrations/202611190002_surat_template.sql', 'utf8');
+  sql(migration);
+  sql(migration);
+  assert.equal(snapshot(), before);
+  assert.equal(
+    sql(
+      'SELECT count(*) FROM public.surat WHERE tanggal_kegiatan IS NOT NULL OR waktu_kegiatan IS NOT NULL OR tempat_kegiatan IS NOT NULL OR sistem_pelaksanaan IS NOT NULL',
+    ),
+    '0',
+  );
+  const input = {
+    ...JSON.parse(suratPayload()),
+    tanggal_kegiatan: '2026-11-21',
+    waktu_kegiatan: '19.00–21.00 WIB',
+    tempat_kegiatan: 'Aula Depok',
+    sistem_pelaksanaan: '',
+  };
+  const call = (actor: number, request: number, payload: Record<string, unknown>) =>
+    sql(
+      asUser(
+        actor,
+        `SELECT public.create_portal_surat('${id(request)}','${JSON.stringify(payload)}')`,
+      ),
+    );
+  const counter = Number(sql('SELECT sum(terakhir) FROM public.surat_counters'));
+  for (const jenis of ['Surat Tugas', 'Surat Undangan']) {
+    for (const field of ['tanggal_kegiatan', 'waktu_kegiatan', 'tempat_kegiatan', 'keterangan']) {
+      assert.throws(() => call(972, 1100, { ...input, jenis, [field]: '' }), /Invalid input/);
+      assert.throws(() => call(972, 1100, { ...input, jenis, [field]: null }), /Invalid input/);
+    }
+  }
+  for (const value of ['2026-02-30', 'not-a-date', '2026-1-1', '2026-11-21T00:00:00Z']) {
+    assert.throws(() => call(972, 1100, { ...input, tanggal_kegiatan: value }), /Invalid input/);
+  }
+  assert.throws(
+    () => call(972, 1100, { ...input, waktu_kegiatan: 'x'.repeat(501) }),
+    /Invalid input/,
+  );
+  assert.throws(() => call(972, 1100, { ...input, actor_name: 'Forged' }), /Invalid input/);
+  assert.throws(() => sql(createLetter(972, 1100)), /Invalid input/);
+  for (const actor of [973, 974, 975]) {
+    assert.throws(() => call(actor, 1100, input), /Permission denied/);
+  }
+  assert.equal(Number(sql('SELECT sum(terakhir) FROM public.surat_counters')), counter);
+  call(972, 1100, input);
+  const number = sql(`SELECT nomor_surat FROM public.surat WHERE id='${id(1100)}'`);
+  call(972, 1100, input);
+  assert.equal(sql(`SELECT nomor_surat FROM public.surat WHERE id='${id(1100)}'`), number);
+  assert.equal(Number(sql('SELECT sum(terakhir) FROM public.surat_counters')), counter + 1);
+  for (const [field, value] of Object.entries({
+    tanggal_kegiatan: '2026-11-22',
+    waktu_kegiatan: '20.00 WIB',
+    tempat_kegiatan: 'Zoom',
+    sistem_pelaksanaan: 'Daring',
+  })) {
+    assert.throws(() => call(972, 1100, { ...input, [field]: value }), /Request does not match/);
+  }
+  assert.equal(
+    sql(
+      `SELECT tanggal_kegiatan::text || '|' || waktu_kegiatan || '|' || tempat_kegiatan FROM public.surat WHERE id='${id(1100)}'`,
+    ),
+    '2026-11-21|19.00–21.00 WIB|Aula Depok',
+  );
+  assert.equal(
+    sql(`SELECT status FROM public.surat WHERE id='${id(1100)}'`),
+    'Menunggu Persetujuan Inti',
+  );
+  sql(asUser(970, `SELECT public.approve_portal_surat('${id(1100)}')`));
+  assert.equal(
+    sql(`SELECT status FROM public.surat WHERE id='${id(1100)}'`),
+    'Selesai / Disetujui',
+  );
+  for (const [index, jenis] of ['Surat Permohonan', 'Surat Rekomendasi'].entries()) {
+    const optional = {
+      ...input,
+      jenis,
+      tanggal_kegiatan: '',
+      waktu_kegiatan: '',
+      tempat_kegiatan: '',
+    };
+    call(970 + index, 1101 + index, optional);
+    call(970 + index, 1101 + index, optional);
+    assert.equal(
+      sql(
+        `SELECT (tanggal_kegiatan IS NULL AND waktu_kegiatan IS NULL AND tempat_kegiatan IS NULL AND sistem_pelaksanaan IS NULL)::text FROM public.surat WHERE id='${id(1101 + index)}'`,
+      ),
+      'true',
+    );
+    assert.equal(
+      sql(`SELECT status FROM public.surat WHERE id='${id(1101 + index)}'`),
+      'Selesai / Disetujui',
+    );
+  }
+});
+
+test('surat template RPC still allocates one number per concurrent request', async () => {
+  const payload = {
+    ...JSON.parse(suratPayload()),
+    tanggal_kegiatan: '2026-11-21',
+    waktu_kegiatan: '19.00 WIB',
+    tempat_kegiatan: 'Aula',
+    sistem_pelaksanaan: 'Tatap muka',
+  };
+  const before = Number(sql('SELECT sum(terakhir) FROM public.surat_counters'));
+  const call = (request: number) =>
+    new Promise<void>((resolve, reject) => {
+      const process = spawn('psql', args, { stdio: ['pipe', 'ignore', 'pipe'] });
+      let error = '';
+      process.stderr.on('data', (data) => {
+        error += String(data);
+      });
+      process.on('error', reject);
+      process.on('close', (code) => (code === 0 ? resolve() : reject(new Error(error))));
+      process.stdin.end(
+        asUser(
+          972,
+          `SELECT public.create_portal_surat('${id(request)}','${JSON.stringify(payload)}')`,
+        ),
+      );
+    });
+  await Promise.all([call(1103), call(1103), call(1104)]);
+  assert.equal(Number(sql('SELECT sum(terakhir) FROM public.surat_counters')), before + 2);
+  assert.equal(
+    sql(
+      `SELECT count(DISTINCT nomor_surat) FROM public.surat WHERE id IN ('${id(1103)}','${id(1104)}')`,
+    ),
+    '2',
+  );
+});

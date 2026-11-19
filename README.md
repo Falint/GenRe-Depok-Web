@@ -16,6 +16,7 @@ Identitas Kabinet PRIMERA (PRIME ERA), periode 2026–2028, hadir pada login, he
 - ESLint Next.js, Prettier, Node test runner + tsx, Playwright.
 - Node.js 22 atau lebih baru dan npm. Gunakan satu lockfile: `package-lock.json`.
 - Test database memerlukan PostgreSQL (`initdb`, `pg_ctl`, `psql`). Di CachyOS/Arch: paket `postgresql`.
+- Test isi PDF surat memerlukan `pdftotext`, tersedia dalam paket `poppler` di CachyOS/Arch.
 
 ## Menjalankan lokal
 
@@ -125,7 +126,7 @@ Playwright menjalankan Next.js dan fixture HTTP Supabase di `127.0.0.1:3100` dan
 - Bukti reimburse dapat berupa satu link file Google Drive opsional. Anggota upload manual ke folder bersama organisasi, lalu menempelkan link file saat pengajuan. Pengurus inti membuka bukti melalui tombol "Lihat bukti" di administrasi. Kolom existing `foto_struk_url` menyimpan link; tidak perlu bucket, Google API, atau migration tambahan. Admin mengatur akses folder/file melalui akun Google pengurus terkait; login portal tidak memberi izin Drive. Portal memvalidasi format link, bukan keberadaan, isi, lokasi folder, atau izin file. Klaim lama tanpa link tetap didukung. Folder pada Drive pribadi tidak otomatis memindahkan kepemilikan atau kuota file ke pemilik folder.
 
 - Surat baru memakai nomor berurutan lintas jenis per tahun WIB, mulai `001`, melalui RPC atomik. Kabid menunggu ACC inti/admin; pengajuan inti/admin otomatis disetujui. Surat lama tidak dinomori ulang. Memerlukan migration `202611190001_surat_workflow.sql`.
-- Approval surat satu tahap oleh inti/admin. Riwayat menyimpan aktor sebenarnya; output persetujuan tetap menampilkan nama ketua seperti template existing. Approval reimburse mengikuti aturan finance existing.
+- Approval surat satu tahap oleh inti/admin. Riwayat menyimpan aktor sebenarnya. Template memakai pembuka tetap, paragraf pengantar dari pemohon, serta rincian kegiatan terpisah. Gambar tanda tangan Ketua M. Ighasta Mughis dan Sekretaris Raihan Satria Elezar hanya muncul setelah ACC. Memerlukan migration tambahan `202611190002_surat_template.sql`. Approval reimburse mengikuti aturan finance existing.
 - Surat tersimpan sebagai data dan pratinjau portal. Setelah ACC, PDF A4 dapat diunduh langsung; PDF dibuat saat diminta tanpa penyimpanan file tambahan. OAuth dan Google Picker tetap tersedia sebagai opsi menyimpan salinan manual ke Drive; pengajuan/approval tidak melakukan upload otomatis. Konfigurasi, retry, dan rollout dijelaskan di [panduan surat](docs/SURAT_ROLLOUT.md). QR tanda tangan/sertifikasi elektronik, export LPJ/Excel, upload struk langsung dari portal, serta upload berkas pengguna langsung belum tersedia. Link modul/video dapat ditambahkan melalui katalog Drive. UI menampilkan batas ini, bukan simulasi keberhasilan. Logo PNG yang tersedia dapat diunduh.
 - Target tiket masih teks bebas. Izin tanggapan mengikuti RLS existing: pimpinan atau pemohon. Akses berdasarkan keanggotaan target perlu model relasi yang disetujui dahulu.
 - RLS baseline memperbolehkan seluruh pengurus membaca direktori profil/kehadiran dan surat/tiket; UI pimpinan bukan batas kerahasiaan database. Tinjau kebijakan transparansi jika data ini perlu dibatasi.

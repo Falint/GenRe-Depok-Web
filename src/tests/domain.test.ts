@@ -124,12 +124,35 @@ test('server input rejects forged identity, whitespace and excessive content', (
     perihal: 'Tugas',
     tujuan: 'Sekolah',
     urgensi: 'Rendah',
-    keterangan: '',
+    keterangan: 'Dalam rangka kegiatan pengurus, kami menyampaikan penugasan berikut.',
+    tanggal_kegiatan: '2026-11-21',
+    waktu_kegiatan: '19.00–21.00 WIB',
+    tempat_kegiatan: 'Aula',
+    sistem_pelaksanaan: '',
   };
   assert.equal(suratInput.safeParse(input).success, true);
   assert.equal(suratInput.safeParse({ ...input, pemohon_id: id }).success, false);
   assert.equal(suratInput.safeParse({ ...input, perihal: '  ' }).success, false);
   assert.equal(suratInput.safeParse({ ...input, urgensi: 'Biasa' }).success, false);
+  assert.equal(suratInput.safeParse({ ...input, keterangan: ' ' }).success, false);
+  assert.equal(suratInput.safeParse({ ...input, tanggal_kegiatan: '2026-02-30' }).success, false);
+  for (const jenis of ['Surat Tugas', 'Surat Undangan']) {
+    for (const field of ['tanggal_kegiatan', 'waktu_kegiatan', 'tempat_kegiatan']) {
+      assert.equal(suratInput.safeParse({ ...input, jenis, [field]: '' }).success, false);
+    }
+  }
+  for (const jenis of ['Surat Permohonan', 'Surat Rekomendasi']) {
+    assert.equal(
+      suratInput.safeParse({
+        ...input,
+        jenis,
+        tanggal_kegiatan: '',
+        waktu_kegiatan: '',
+        tempat_kegiatan: '',
+      }).success,
+      true,
+    );
+  }
   assert.equal(
     suratInput.safeParse({ ...input, perihal: 'x'.repeat(INPUT_LIMITS.TITLE + 1) }).success,
     false,

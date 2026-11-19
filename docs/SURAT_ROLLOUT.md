@@ -6,7 +6,11 @@
 - Nomor baru berbagi satu urutan lintas jenis, mulai `001` setiap tahun WIB: `001/ST/FG-DPK/XI/2026`. Nomor dialokasikan ketika pengajuan tersimpan, bukan saat ACC. Setelah 999, nomor menjadi 1000.
 - Nomor, status, dan riwayat lama tidak diubah. Pengajuan kabid lama yang masih menunggu dapat disetujui inti/admin. Pengajuan lama tidak otomatis dikirim ke Drive; inti/admin bisa memakai tombol simpan salinan ke Google Drive.
 - Retry dari form yang sama memakai ID tetap. Jika respons hilang, jangan membuka form baru sebelum memeriksa daftar surat. Mengubah payload setelah request tersimpan akan ditolak.
-- Surat disimpan sebagai data di database dan pratinjau HTML di portal. PDF dibuat di memori server hanya ketika pengguna menekan **Unduh PDF** setelah ACC; file diunduh ke perangkat tanpa disimpan di server atau Supabase Storage. PDF menggunakan kop dan isi template portal. Nama pada blok persetujuan tetap Ketua Umum Muhammad Ighasta Mughis. Aktor sebenarnya dicatat pada riwayat portal; nama ketua pada output bukan bukti ketua pribadi mengklik ACC.
+- Surat disimpan sebagai data di database dan pratinjau HTML di portal. PDF dibuat di memori server hanya ketika pengguna menekan **Unduh PDF** setelah ACC; file diunduh ke perangkat tanpa disimpan di server atau Supabase Storage. PDF menggunakan kop dan isi template portal. Template mengikuti surat referensi: satu logo, kop organisasi, watermark, paragraf pembuka tetap, paragraf pengantar dari pemohon, dan rincian kegiatan. Blok tanda tangan Ketua M. Ighasta Mughis dan Sekretaris Raihan Satria Elezar beserta gambar asli dari referensi hanya muncul setelah ACC. Aktor sebenarnya dicatat pada riwayat portal; nama pada output bukan bukti kedua pejabat pribadi mengklik ACC. Tidak ada tahap approval sekretaris tambahan.
+- Gambar tanda tangan disimpan di aset server, bukan `public/`. Route gambar memeriksa sesi, profil pengurus, akses baca RLS, dan status ACC; respons tidak boleh disimpan cache. Pengurus yang dapat membaca surat disetujui tetap dapat menyimpan gambar dari dokumen tersebut.
+- Aset tanda tangan diekstrak dari gambar dan soft mask halaman pertama PDF referensi, termasuk stempel sekretaris. Tidak ada tanda tangan baru yang dibuat.
+- `keterangan` menjadi paragraf pengantar wajib untuk pengajuan baru. `tanggal_kegiatan`, `waktu_kegiatan`, dan `tempat_kegiatan` wajib untuk Tugas/Undangan, opsional untuk Permohonan/Rekomendasi; `sistem_pelaksanaan` selalu opsional. Form menampilkan contoh tanpa mengisinya otomatis. Surat lama tetap terbaca tanpa rincian kegiatan.
+- Preview dan PDF yang diunduh ulang memakai template baru. Salinan Drive yang sudah ada tidak ditimpa. Lampiran ditampilkan `-`; halaman lampiran referensi tidak disertakan.
 - Unduhan PDF memeriksa sesi, profil pengurus, status ACC, dan akses baca surat melalui RLS. Guest tidak dapat mengunduh. Kebijakan baca surat existing tetap berlaku; perubahan ini tidak membatasi surat hanya kepada pemohonnya.
 - Pengajuan dan approval tidak menjalankan upload Google Drive otomatis. Integrasi OAuth/Picker tetap tersedia untuk dikerjakan nanti. Inti/admin dapat memilih **Simpan salinan ke Google Drive** secara manual dari pratinjau. Upload gagal tidak membatalkan persetujuan. Tidak ada worker retry otomatis; proses terhenti bisa diulang setelah lease dua menit berakhir.
 - File mengikuti izin folder Drive. Portal tidak menjadikan file publik atau memberikan akses Drive otomatis kepada pemohon.
@@ -14,9 +18,9 @@
 ## Urutan penerapan
 
 1. Cadangkan database dan hentikan sementara pengajuan/approval surat. Modul lain tidak perlu dihentikan.
-2. Terapkan seluruh migration prasyarat repo hingga `202611130001_guest_accounts.sql`, lalu `202611190001_surat_workflow.sql` pada target yang sudah dikonfirmasi. Jangan menjalankan baseline ulang pada database existing.
-3. Deploy aplikasi yang sesuai migration. Versi lama masih dapat membaca surat, tetapi INSERT langsung sudah ditolak. Jangan membuka pengajuan lagi sebelum kode baru aktif.
-4. Tanpa konfigurasi Google, surat dapat diajukan, disetujui, dilihat, dan diunduh sebagai PDF. Perubahan ke unduhan PDF tidak memerlukan migration tambahan atau bucket Storage.
+2. Terapkan seluruh migration prasyarat repo hingga `202611130001_guest_accounts.sql`, lalu `202611190001_surat_workflow.sql` dan `202611190002_surat_template.sql` pada target yang sudah dikonfirmasi. Jangan menjalankan baseline ulang pada database existing.
+3. Untuk database yang sudah menerapkan workflow, cukup jalankan **202611190002_surat_template.sql**. Migration ini menambah empat kolom nullable dan memperbarui RPC create; tidak menomori ulang atau mengubah surat lama. Tutup form lama dan hentikan pengajuan selama pergantian: payload lama ditolak setelah migration. Deploy aplikasi yang sesuai migration. Versi lama masih dapat membaca surat, tetapi INSERT langsung sudah ditolak. Jangan membuka pengajuan lagi sebelum kode baru aktif.
+4. Tanpa konfigurasi Google, surat dapat diajukan, disetujui, dilihat, dan diunduh sebagai PDF. Template baru memerlukan migration 202611190002; bucket Storage tidak diperlukan.
 5. Uji satu surat kabid dan satu surat inti/admin: nomor berbeda, approval sesuai role, pratinjau tersedia, dan unduhan PDF berhasil. Konfigurasi Google berikut opsional, hanya untuk menyimpan salinan ke Drive.
 
 SQL, deploy, dan konfigurasi akun Google merupakan tindakan operator; pekerjaan lokal tidak menerapkannya otomatis.
@@ -47,11 +51,11 @@ Referensi: [scope Drive](https://developers.google.com/workspace/drive/api/guide
 - Respons upload hilang setelah file tersimpan: retry menggunakan ID Drive yang sama. HTTP 409 diverifikasi terhadap ID surat dan MIME PDF sebelum hasil dinyatakan tersedia.
 - Storage penuh, folder dihapus, atau izin berubah: perbaiki akses/kuota, pilih folder lagi bila perlu, lalu retry.
 - Encryption key hilang/berubah: koneksi lama tidak dapat didekripsi. Pulihkan key yang sama atau hubungkan ulang akun dan pilih ulang folder. File yang sudah dibuat tidak dihapus.
-- Tidak ada pembuatan QR verifikasi, sertifikasi elektronik, signature image, editor isi per jenis, atau penomoran ulang surat historis.
+- Tidak ada pembuatan QR verifikasi, sertifikasi elektronik, editor isi per jenis, atau penomoran ulang surat historis.
 
 ## Rollback tanpa kehilangan data
 
-Hentikan pengajuan/approval surat sebelum rollback aplikasi. Pertahankan migration dan data nomor/approval/file yang sudah tersimpan. Jangan mengembalikan grant INSERT atau hak approval kabid sebagai jalan pintas agar versi lama bekerja. Jalankan versi lama dengan fitur tulis surat dinonaktifkan sampai versi yang kompatibel dipulihkan. Modul lain dan pembacaan surat dapat tetap berjalan.
+Hentikan pengajuan/approval surat sebelum rollback aplikasi. Pertahankan kedua migration serta data rincian kegiatan/nomor/approval/file yang sudah tersimpan. Kolom baru tetap nullable; aplikasi lama bisa membaca, tetapi payload pengajuan lama tidak kompatibel dengan RPC terbaru. Jangan mengembalikan grant INSERT atau hak approval kabid sebagai jalan pintas agar versi lama bekerja. Jalankan versi lama dengan fitur tulis surat dinonaktifkan sampai versi yang kompatibel dipulihkan. Modul lain dan pembacaan surat dapat tetap berjalan.
 
 Tidak ada down migration destruktif otomatis. Pemulihan penuh schema lama membutuhkan backup serta rekonsiliasi nomor dan surat yang terbit sejak perubahan; jangan menghapus tabel counter atau mengulang urutan pada tahun yang sama.
 
@@ -61,4 +65,4 @@ Unit test memeriksa matriks role, input, enkripsi, PDF beberapa halaman, validas
 
 Test lokal tidak membuktikan akun Google, callback deploy, file Drive, atau kebijakan Supabase live. Catat hasil uji operator setelah konfigurasi dan migration diterapkan.
 
-Verifikasi sesi implementasi 19 November 2026: 58 unit/database test, 10 E2E desktop/mobile, lint, typecheck, format check, dan production build lulus. Skenario OAuth diperiksa ulang setelah penambahan penanganan koneksi putus dan lulus pada desktop/mobile. Contoh PDF A4 diperiksa visual; empat logo juga terbukti masuk build trace server. SQL hanya dijalankan pada PostgreSQL sementara, bukan Supabase live. Login Google, pemilihan folder Google Picker, dan upload ke Drive nyata belum diuji.
+Verifikasi template 19 November 2026: 61 unit/database test, 10 E2E desktop/mobile, lint, typecheck, format check, dan production build lulus. Test memeriksa pembuka tetap, paragraf pemohon, tanggal valid, kewajiban jadwal per jenis, preservasi surat lama, retry/concurrency, serta penolakan akses gambar/PDF sebelum ACC dan tanpa sesi pengurus. Contoh PDF A4 dan preview desktop diperiksa visual. Test isi PDF memakai `pdftotext` dari paket Poppler. SQL hanya dijalankan pada PostgreSQL sementara, bukan Supabase live. Login Google, pemilihan folder Google Picker, dan upload ke Drive nyata belum diuji.

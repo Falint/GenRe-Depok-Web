@@ -93,6 +93,15 @@ test('surat form, keyboard dialog, attendance persistence and empty ticket state
   await page.getByRole('button', { name: '+ Request Surat' }).click();
   await page.getByLabel('Perihal / Pokok Surat').fill('Permohonan Aula Uji');
   await page.getByLabel('Tujuan / Pihak yang Dituju').fill('Sekolah');
+  await expect(
+    page.getByText('Paragraf ini muncul setelah pembuka', { exact: false }),
+  ).toBeVisible();
+  await page
+    .getByLabel('Paragraf Pengantar Kegiatan')
+    .fill('Dalam rangka kegiatan pengurus, kami mengundang Saudara/i untuk hadir.');
+  await page.getByLabel('Tanggal Kegiatan').fill('2026-11-21');
+  await page.getByLabel('Waktu Kegiatan').fill('19.00–21.00 WIB');
+  await page.getByLabel('Tempat Kegiatan').fill('Aula Balai Kota Depok');
   await page.getByRole('button', { name: 'Kirim Pengajuan' }).click();
   await expect(dialog).not.toBeVisible();
   await expect(page.getByRole('status')).toContainText('Surat berhasil diajukan');
@@ -103,7 +112,22 @@ test('surat form, keyboard dialog, attendance persistence and empty ticket state
   expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
   await expect(dialog.getByRole('button', { name: /Setujui Surat/ })).toHaveCount(0);
   await expect(dialog).toContainText('Selesai / Disetujui');
-  await expect(dialog).toContainText('Muhammad Ighasta Mughis');
+  await expect(dialog).toContainText('M. Ighasta Mughis');
+  await expect(dialog).toContainText('Raihan Satria Elezar');
+  await expect(dialog).toContainText('Sabtu, 21 November 2026');
+  await expect(dialog).toContainText(
+    'Bersama ini disampaikan bahwa kami, Forum Generasi Berencana',
+  );
+  for (const image of await dialog.getByRole('img', { name: /^Tanda tangan/ }).all()) {
+    await expect(image).toBeVisible();
+    await expect
+      .poll(() => image.evaluate((element: HTMLImageElement) => element.naturalWidth))
+      .toBeGreaterThan(0);
+    const response = await page.request.get((await image.getAttribute('src'))!);
+    expect(response.status()).toBe(200);
+    expect(response.headers()['cache-control']).toContain('no-store');
+    expect(response.headers()['content-type']).toBe('image/png');
+  }
   await expect(dialog).toContainText('Surat tersimpan di portal');
   await expect(dialog).not.toContainText('Admin perlu menghubungkan akun Google Drive');
   await expect(dialog).toContainText('001/ST/FG-DPK/');
@@ -153,6 +177,15 @@ test('surat kabid waits for inti approval and kadiv has no creation shortcut', a
   await page.getByRole('button', { name: '+ Request Surat' }).click();
   await page.getByLabel('Perihal / Pokok Surat').fill('Surat Kabid Uji');
   await page.getByLabel('Tujuan / Pihak yang Dituju').fill('Sekolah');
+  await expect(
+    page.getByText('Paragraf ini muncul setelah pembuka', { exact: false }),
+  ).toBeVisible();
+  await page
+    .getByLabel('Paragraf Pengantar Kegiatan')
+    .fill('Dalam rangka kegiatan pengurus, kami mengundang Saudara/i untuk hadir.');
+  await page.getByLabel('Tanggal Kegiatan').fill('2026-11-21');
+  await page.getByLabel('Waktu Kegiatan').fill('19.00–21.00 WIB');
+  await page.getByLabel('Tempat Kegiatan').fill('Aula Balai Kota Depok');
   await page.getByRole('button', { name: 'Kirim Pengajuan' }).click();
   await expect(page.getByRole('dialog')).not.toBeVisible();
   await page
@@ -163,6 +196,13 @@ test('surat kabid waits for inti approval and kadiv has no creation shortcut', a
   await expect(page.getByRole('link', { name: 'Unduh PDF' })).toHaveCount(0);
   const pendingId = (await page.getByRole('dialog').innerText()).match(/ID: ([a-f0-9-]{36})/)![1];
   expect((await page.request.get(`/surat/${pendingId}/pdf`)).status()).toBe(409);
+  expect((await page.request.get(`/surat/${pendingId}/tanda-tangan/ketua`)).status()).toBe(409);
+  expect((await page.request.get(`/surat/${pendingId}/tanda-tangan/sekretaris`)).status()).toBe(
+    409,
+  );
+  await expect(page.getByRole('region', { name: 'Tanda tangan persetujuan' })).toHaveCount(0);
+  await expect(page.getByRole('dialog')).not.toContainText('M. Ighasta Mughis');
+  await expect(page.getByRole('dialog')).not.toContainText('Raihan Satria Elezar');
   await expect(page.getByRole('button', { name: /Setujui Surat/ })).toHaveCount(0);
   await page.getByRole('button', { name: 'Tutup dialog' }).last().click();
   await request.get('http://127.0.0.1:54328/__test/actor?id=1&level=inti');
@@ -179,6 +219,11 @@ test('surat kabid waits for inti approval and kadiv has no creation shortcut', a
     .click();
   await expect(page.getByRole('dialog')).toContainText('Selesai / Disetujui');
   await expect(page.getByRole('dialog')).toContainText('ACC: Bendahara');
+  await expect(page.getByRole('region', { name: 'Tanda tangan persetujuan' })).toBeVisible();
+  expect((await page.request.get(`/surat/${pendingId}/tanda-tangan/ketua`)).status()).toBe(200);
+  expect((await page.request.get(`/surat/${pendingId}/tanda-tangan/sekretaris`)).status()).toBe(
+    200,
+  );
   await request.get('http://127.0.0.1:54328/__test/actor?id=1&level=kadiv');
   await page.goto('/dashboard');
   await expect(page.getByRole('button', { name: '+ Request Surat' })).toHaveCount(0);
@@ -191,11 +236,16 @@ test('surat PDF denies unauthenticated users and guests and handles missing lett
 }) => {
   const path = '/surat/00000000-0000-4000-8000-000000000999/pdf';
   expect((await page.request.get(path)).status()).toBe(401);
+  const signature = path.replace('/pdf', '/tanda-tangan/ketua');
+  expect((await page.request.get(signature)).status()).toBe(401);
   await login(page);
   expect((await page.request.get(path)).status()).toBe(404);
+  expect((await page.request.get(signature)).status()).toBe(404);
+  expect((await page.request.get(signature.replace('/ketua', '/invalid'))).status()).toBe(404);
   expect((await page.request.get('/surat/invalid-id/pdf')).status()).toBe(404);
   await request.get('http://127.0.0.1:54328/__test/actor?id=1&level=guest');
   expect((await page.request.get(path)).status()).toBe(403);
+  expect((await page.request.get(signature)).status()).toBe(403);
 });
 
 test('surat Drive OAuth is admin-only and rejects mismatched or replayed state', async ({

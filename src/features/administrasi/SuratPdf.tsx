@@ -12,96 +12,130 @@ import {
   renderToBuffer,
 } from '@react-pdf/renderer';
 import type { Row } from '@/features/portal/schema';
-import { KABINET } from '@/features/organisasi/content';
 import { formatDate } from '@/features/portal/mapping';
+import {
+  SURAT_OPENING,
+  SURAT_SCHEDULE_INTRO,
+  SURAT_SIGNATORIES,
+  isSuratApproved,
+  suratSchedule,
+  suratClosing,
+} from './suratTemplate';
 
 const styles = StyleSheet.create({
   page: {
-    padding: 42,
-    paddingBottom: 55,
-    fontFamily: 'Helvetica',
-    fontSize: 10,
-    lineHeight: 1.6,
-    color: '#1e293b',
+    paddingHorizontal: 44,
+    paddingTop: 22,
+    paddingBottom: 42,
+    fontFamily: 'Times-Roman',
+    fontSize: 11,
+    lineHeight: 1.35,
+    color: '#000000',
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderBottomWidth: 2,
-    paddingBottom: 12,
-    marginBottom: 22,
+  header: { alignItems: 'center', borderBottomWidth: 3, paddingBottom: 9, marginBottom: 14 },
+  logo: { width: 58, height: 63, objectFit: 'contain', marginBottom: 5 },
+  heading: { fontFamily: 'Times-Bold', fontSize: 13, textAlign: 'center' },
+  bold: { fontFamily: 'Times-Bold' },
+  paragraph: { marginBottom: 10, textAlign: 'justify' },
+  watermark: {
+    position: 'absolute',
+    top: 270,
+    left: 135,
+    width: 325,
+    height: 360,
+    objectFit: 'contain',
+    opacity: 0.1,
   },
-  logo: { width: 33, height: 38, objectFit: 'contain', marginHorizontal: 3 },
-  heading: { flex: 1, textAlign: 'center', fontSize: 8 },
-  bold: { fontFamily: 'Helvetica-Bold' },
-  paragraph: { marginBottom: 12, textAlign: 'justify' },
-  signature: { marginTop: 20, flexDirection: 'row', justifyContent: 'space-between' },
+  row: { flexDirection: 'row' },
+  label: { width: 108 },
+  colon: { width: 10 },
+  value: { flex: 1 },
+  signature: { marginTop: 10 },
 });
 
 export async function renderSuratPdf(surat: Row<'surat'>) {
-  const logos = await Promise.all(
-    ['logo-depok.png', 'logo-dp3ap2kb.png', 'logo-salam-genre.png', 'logo-genre-depok.png'].map(
-      (name) => readFile(path.join(process.cwd(), 'public', name)),
-    ),
-  );
+  const logo = await readFile(path.join(process.cwd(), 'public', 'logo-genre-depok.png'));
+  const approved = isSuratApproved(surat.status);
+  const signatures = approved
+    ? await Promise.all(
+        SURAT_SIGNATORIES.map((signer) =>
+          readFile(path.join(process.cwd(), 'assets', 'surat', `ttd-${signer.key}.png`)),
+        ),
+      )
+    : [];
+  const schedule = suratSchedule(surat);
   return renderToBuffer(
     <Document title={`${surat.jenis} - ${surat.nomor_surat}`} author="Forum GenRe Kota Depok">
       <Page size="A4" style={styles.page}>
+        <PdfImage src={logo} style={styles.watermark} fixed />
         <View style={styles.header} wrap={false}>
-          <PdfImage src={logos[0]} style={styles.logo} />
-          <PdfImage src={logos[1]} style={styles.logo} />
-          <View style={styles.heading}>
-            <Text>PEMERINTAH KOTA DEPOK • DINAS DP3AP2KB</Text>
-            <Text style={styles.bold}>FORUM GENERASI BERENCANA (GENRE) KOTA DEPOK</Text>
-            <Text>Sekretariat: Gedung Dibaleka II Balai Kota Depok</Text>
-            <Text>Jl. Margonda Raya No. 54</Text>
-            <Text>SK Walikota Depok No. 100.3.3.3/61/Kpts/DP3AP2KB/Huk/2026</Text>
-          </View>
-          <PdfImage src={logos[2]} style={styles.logo} />
-          <PdfImage src={logos[3]} style={styles.logo} />
+          <PdfImage src={logo} style={styles.logo} />
+          <Text style={styles.heading}>PENGURUS GENRE CABANG</Text>
+          <Text style={styles.heading}>FORUM GENERASI BERENCANA KOTA DEPOK</Text>
+          <Text style={{ fontFamily: 'Helvetica', fontSize: 9, marginTop: 3 }}>
+            IG : @genre_kotadepok, Email : genre.depok@gmail.com
+          </Text>
         </View>
-        <Text style={{ textAlign: 'right', marginBottom: 12 }}>
-          Kota Depok, {formatDate(surat.tanggal, true)}
-        </Text>
-        <Text>Nomor: {surat.nomor_surat}</Text>
-        <Text>Lampiran: - (Satu Berkas)</Text>
-        <Text style={styles.bold}>
-          Perihal: {surat.jenis}: {surat.perihal}
-        </Text>
-        <View style={{ marginVertical: 18 }} wrap={false}>
-          <Text>Kepada Yth,</Text>
+        <View style={[styles.row, { marginBottom: 18 }]} wrap={false}>
+          <View style={{ flex: 1 }}>
+            {[
+              ['Nomor', surat.nomor_surat],
+              ['Lampiran', '-'],
+              ['Perihal', surat.perihal],
+            ].map(([label, value]) => (
+              <View key={label} style={styles.row}>
+                <Text style={{ width: 48 }}>{label}</Text>
+                <Text style={styles.colon}>:</Text>
+                <Text style={[styles.value, label === 'Perihal' ? styles.bold : {}]}>{value}</Text>
+              </View>
+            ))}
+          </View>
+          <Text style={{ width: 145, textAlign: 'right' }}>
+            Depok, {formatDate(surat.tanggal, true)}
+          </Text>
+        </View>
+        <View style={{ marginBottom: 18 }} wrap={false}>
+          <Text>Kepada Yth.</Text>
           <Text style={styles.bold}>{surat.tujuan}</Text>
           <Text>di Tempat</Text>
         </View>
-        <Text style={styles.paragraph}>Dengan hormat,</Text>
-        <Text style={styles.paragraph}>
-          Salam Generasi Berencana! Teriring salam dan doa semoga Bapak/Ibu senantiasa dalam
-          lindungan Tuhan Yang Maha Esa dan dilancarkan dalam menjalankan aktivitas sehari-hari.
-        </Text>
-        <Text style={styles.paragraph}>
-          Sehubungan dengan pelaksanaan program kerja Forum GenRe Kota Depok masa bakti{' '}
-          {KABINET.periode}, dengan ini kami sampaikan bahwa:
-        </Text>
-        <Text style={styles.paragraph}>{surat.keterangan || '-'}</Text>
-        <Text style={styles.paragraph}>
-          Demikian {surat.jenis.toLowerCase()} ini kami sampaikan. Atas perhatian, dukungan, dan
-          kerja sama yang baik, kami ucapkan terima kasih.
-        </Text>
-        <View style={styles.signature} wrap={false}>
-          <View style={{ maxWidth: '45%' }}>
-            <Text>Diajukan oleh:</Text>
-            <Text style={styles.bold}>{surat.pemohon_nama}</Text>
-            <Text>{surat.divisi}</Text>
+        <Text>Dengan hormat,</Text>
+        <Text style={[styles.paragraph, { textIndent: 24 }]}>{SURAT_OPENING}</Text>
+        {surat.keterangan && (
+          <Text style={[styles.paragraph, { textIndent: 24 }]}>{surat.keterangan}</Text>
+        )}
+        {schedule.length > 0 && (
+          <View style={{ marginBottom: 12 }}>
+            <Text style={styles.paragraph}>{SURAT_SCHEDULE_INTRO}</Text>
+            {schedule.map(([label, value]) => (
+              <View key={label} style={[styles.row, { marginLeft: 24 }]} wrap={false}>
+                <Text style={styles.label}>{label}</Text>
+                <Text style={styles.colon}>:</Text>
+                <Text style={styles.value}>{value}</Text>
+              </View>
+            ))}
           </View>
-          <View style={{ maxWidth: '50%', textAlign: 'center' }}>
-            <Text>Mengetahui &amp; Menyetujui,</Text>
-            <Text style={styles.bold}>Ketua Umum Forum GenRe Kota Depok</Text>
-            <Text style={{ marginTop: 28, fontFamily: 'Helvetica-Bold' }}>
-              Muhammad Ighasta Mughis
-            </Text>
-            <Text style={{ fontSize: 7 }}>DISETUJUI DI PORTAL</Text>
+        )}
+        <Text style={[styles.paragraph, { textIndent: 24 }]}>{suratClosing(surat.jenis)}</Text>
+        {approved && (
+          <View style={styles.signature} wrap={false}>
+            <Text style={{ textAlign: 'center', marginBottom: 4 }}>Hormat Kami,</Text>
+            <View style={[styles.row, { justifyContent: 'space-between' }]}>
+              {SURAT_SIGNATORIES.map((signer, index) => (
+                <View key={signer.key} style={{ width: '45%', alignItems: 'center' }}>
+                  <Text style={[styles.bold, { height: 30, textAlign: 'center' }]}>
+                    {signer.role}
+                  </Text>
+                  <PdfImage
+                    src={signatures[index]}
+                    style={{ width: 140, height: 68, objectFit: 'contain' }}
+                  />
+                  <Text style={[styles.bold, { textDecoration: 'underline' }]}>{signer.name}</Text>
+                </View>
+              ))}
+            </View>
           </View>
-        </View>
+        )}
       </Page>
     </Document>,
   );

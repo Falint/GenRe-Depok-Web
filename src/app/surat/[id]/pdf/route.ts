@@ -1,7 +1,8 @@
 import { getProfile } from '@/features/auth/server';
 import { isPortalMember } from '@/features/auth/permissions';
 import { createClient } from '@/lib/supabase/server';
-import { rowSchemas, SURAT_STATUS } from '@/features/portal/schema';
+import { rowSchemas } from '@/features/portal/schema';
+import { isSuratApproved } from '@/features/administrasi/suratTemplate';
 import { recordId } from '@/features/portal/validation';
 import { renderSuratPdf } from '@/features/administrasi/SuratPdf';
 import { safeError } from '@/lib/errors';
@@ -31,7 +32,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
       );
     if (!data) return Response.json({ error: 'Surat tidak ditemukan.' }, { status: 404, headers });
     const surat = rowSchemas.surat.parse(data);
-    if (surat.status !== SURAT_STATUS.COMPLETE && surat.status !== 'Selesai / Terbit (QR ACC)')
+    if (!isSuratApproved(surat.status))
       return Response.json({ error: 'Surat belum disetujui.' }, { status: 409, headers });
     // PDF hanya dibuat saat diminta; data surat tetap menjadi sumber dokumen.
     const pdf = await renderSuratPdf(surat);

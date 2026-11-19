@@ -1,11 +1,17 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
 import { registerHooks } from 'node:module';
+import { execFileSync } from 'node:child_process';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '../lib/supabase/database.types';
 import type { Row } from '../features/portal/schema';
 import { encryptDriveSecret, decryptDriveSecret } from '../features/administrasi/driveCrypto';
 import { readDriveFolder } from '../features/administrasi/drive';
+import {
+  isSuratApproved,
+  suratSchedule,
+  SURAT_OPENING,
+} from '../features/administrasi/suratTemplate';
 
 // Next externalizes the PDF renderer with regular React; reproduce that resolution in server-only tests.
 registerHooks({
@@ -79,6 +85,38 @@ test('surat PDF renders A4 with multiple pages for long activity details', async
   assert.match(contents, /\/MediaBox \[0 0 595\.\d+ 841\.\d+\]/);
   const pageCount = Number(contents.match(/\/Type \/Pages\s*\/Count (\d+)/)?.[1]);
   assert.ok(pageCount > 1, `Expected multiple pages, got ${pageCount}`);
+});
+
+test('surat template keeps legacy content and only embeds signatures after approval', async () => {
+  const legacy = await renderSuratPdf({ ...letter, status: 'Menunggu Persetujuan Inti' });
+  const pdf = await renderSuratPdf({
+    ...letter,
+    tanggal_kegiatan: '2026-11-21',
+    waktu_kegiatan: '19.00–21.00 WIB',
+    tempat_kegiatan: 'Aula Balai Kota Depok',
+    sistem_pelaksanaan: 'Tatap muka',
+  });
+  const text = (buffer: Buffer) =>
+    execFileSync('pdftotext', ['-', '-'], { input: buffer, encoding: 'utf8' }).replace(/\s+/g, ' ');
+  const pendingText = text(legacy);
+  const approvedText = text(pdf);
+  assert.ok(pendingText.includes(SURAT_OPENING));
+  assert.ok(pendingText.includes(letter.keterangan!));
+  assert.ok(!pendingText.includes('Hormat Kami'));
+  assert.ok(!pendingText.includes('M. Ighasta Mughis'));
+  assert.ok(!pendingText.includes('Raihan Satria Elezar'));
+  assert.ok(approvedText.includes('M. Ighasta Mughis'));
+  assert.ok(approvedText.includes('Raihan Satria Elezar'));
+  assert.ok(approvedText.includes('Sabtu, 21 November 2026'));
+  assert.ok(approvedText.indexOf(letter.keterangan!) < approvedText.indexOf('Hari, Tanggal'));
+  assert.ok(approvedText.includes('Tatap muka'));
+  const images = (buffer: Buffer) =>
+    (buffer.toString('latin1').match(/\/Subtype \/Image/g) || []).length;
+  assert.ok(images(pdf) > images(legacy), 'Approved PDF must embed signature images');
+  assert.equal(Number(pdf.toString('latin1').match(/\/Type \/Pages\s*\/Count (\d+)/)?.[1]), 1);
+  assert.deepEqual(suratSchedule(letter), []);
+  assert.equal(isSuratApproved('Selesai / Terbit (QR ACC)'), true);
+  assert.equal(isSuratApproved('Selesai palsu'), false);
 });
 
 test('upload failure preserves approval and retry reuses Drive file ID after lost response', async () => {

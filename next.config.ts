@@ -13,6 +13,8 @@ const config: NextConfig = {
       './public/logo-dp3ap2kb.png',
       './public/logo-salam-genre.png',
       './public/logo-genre-depok.png',
+      './assets/surat/ttd-ketua.png',
+      './assets/surat/ttd-sekretaris.png',
     ],
   },
   async headers() {

@@ -5,6 +5,7 @@ import Dialog from './Dialog';
 import { suratInput } from '@/features/portal/validation';
 import React, { useState } from 'react';
 import { X, Send, FileText, AlertCircle } from 'lucide-react';
+import { SURAT_OPENING, SURAT_PARAGRAPH_EXAMPLE } from '@/features/administrasi/suratTemplate';
 
 export default function CreateSuratModal({
   isOpen,
@@ -20,18 +21,24 @@ export default function CreateSuratModal({
     tujuan: '',
     urgensi: 'Sedang',
     keterangan: '',
+    tanggal_kegiatan: '',
+    waktu_kegiatan: '',
+    tempat_kegiatan: '',
+    sistem_pelaksanaan: '',
   });
+  const scheduleRequired = formData.jenis === 'Surat Tugas' || formData.jenis === 'Surat Undangan';
 
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!formData.perihal || !formData.tujuan) {
-      alert('Mohon lengkapi perihal dan tujuan surat!');
+    const parsed = suratInput.safeParse(formData);
+    if (!parsed.success) {
+      alert('Lengkapi paragraf pengantar dan rincian kegiatan sesuai jenis surat.');
       return;
     }
 
-    const newSurat = formData;
+    const newSurat = parsed.data;
 
     if (await onSubmit(newSurat)) onClose();
   };
@@ -132,18 +139,66 @@ export default function CreateSuratModal({
           </div>
 
           <div>
+            <details className="mb-3 rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
+              <summary className="cursor-pointer font-bold">Paragraf pembuka tetap</summary>
+              <p className="mt-2">Dengan hormat,</p>
+              <p className="mt-1">{SURAT_OPENING}</p>
+            </details>
             <label className="block font-bold text-slate-700 mb-1" htmlFor="createsuratmodal-5">
-              Rincian Kegiatan / Keterangan Tambahan
+              Paragraf Pengantar Kegiatan
             </label>
             <textarea
-              rows={3}
-              placeholder="Uraikan detail tanggal, lokasi kegiatan, sasaran audiens, atau latar belakang pembuatan surat..."
+              rows={5}
+              placeholder="Tulis latar belakang, tujuan kegiatan, dan maksud surat."
+              required
+              maxLength={10000}
+              aria-describedby="surat-paragraph-example"
               value={formData.keterangan}
               onChange={(e) => setFormData({ ...formData, keterangan: e.target.value })}
               className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-genre-blue/30 focus:outline-none"
               id="createsuratmodal-5"
             />
+            <p id="surat-paragraph-example" className="mt-2 text-xs text-slate-500">
+              Paragraf ini muncul setelah pembuka dan sebelum rincian kegiatan. Contoh:{' '}
+              {SURAT_PARAGRAPH_EXAMPLE}
+            </p>
           </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {(
+              [
+                ['tanggal_kegiatan', 'Tanggal Kegiatan', 'date', ''],
+                ['waktu_kegiatan', 'Waktu Kegiatan', 'text', 'Pukul 19.00–21.00 WIB'],
+                [
+                  'tempat_kegiatan',
+                  'Tempat Kegiatan',
+                  'text',
+                  'Zoom Cloud Meetings (link menyusul)',
+                ],
+                ['sistem_pelaksanaan', 'Sistem Pelaksanaan', 'text', 'Breakout Rooms per bidang'],
+              ] as const
+            ).map(([field, label, type, placeholder]) => (
+              <div key={field}>
+                <label className="block font-bold text-slate-700 mb-1" htmlFor={`surat-${field}`}>
+                  {label}
+                </label>
+                <input
+                  id={`surat-${field}`}
+                  type={type}
+                  value={formData[field]}
+                  placeholder={placeholder}
+                  required={field !== 'sistem_pelaksanaan' && scheduleRequired}
+                  maxLength={500}
+                  onChange={(e) => setFormData({ ...formData, [field]: e.target.value })}
+                  className="w-full min-w-0 px-3 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-genre-blue/30 focus:outline-none"
+                />
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-slate-500">
+            Tanggal, waktu, dan tempat wajib untuk Surat Tugas dan Surat Undangan. Sistem
+            pelaksanaan opsional.
+          </p>
 
           <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 flex items-start space-x-2 text-amber-800 text-xs">
             <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
