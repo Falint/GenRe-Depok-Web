@@ -95,16 +95,33 @@ test('surat form, keyboard dialog, attendance persistence and empty ticket state
   await page.getByLabel('Tujuan / Pihak yang Dituju').fill('Sekolah');
   await page.getByRole('button', { name: 'Kirim Pengajuan' }).click();
   await expect(dialog).not.toBeVisible();
-  await expect(page.getByRole('status')).toContainText('Draf surat berhasil diajukan');
+  await expect(page.getByRole('status')).toContainText('Surat berhasil diajukan');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.goto('/administrasi');
   await expect(page.getByRole('heading', { name: 'Permohonan Aula Uji' })).toBeVisible();
   await page.getByRole('heading', { name: 'Permohonan Aula Uji' }).click();
   expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
-  await page.getByRole('button', { name: 'Setujui Surat' }).click();
+  await expect(dialog.getByRole('button', { name: /Setujui Surat/ })).toHaveCount(0);
+  await expect(dialog).toContainText('Selesai / Disetujui');
+  await expect(dialog).toContainText('Muhammad Ighasta Mughis');
+  await expect(dialog).toContainText('Surat tersimpan di portal');
+  await expect(dialog).not.toContainText('Admin perlu menghubungkan akun Google Drive');
+  await expect(dialog).toContainText('001/ST/FG-DPK/');
   await expect(
-    page.getByRole('alert').filter({ hasText: 'migrasi database transaksi' }),
+    dialog.getByRole('button', { name: 'Simpan salinan ke Google Drive' }),
   ).toBeVisible();
+  const pdfLink = dialog.getByRole('link', { name: 'Unduh PDF' });
+  const pdf = await page.request.get((await pdfLink.getAttribute('href'))!);
+  expect(pdf.status()).toBe(200);
+  expect(pdf.headers()['content-type']).toBe('application/pdf');
+  expect(pdf.headers()['cache-control']).toContain('no-store');
+  expect(pdf.headers()['content-disposition']).toContain('attachment;');
+  expect((await pdf.body()).subarray(0, 5).toString()).toBe('%PDF-');
+  const downloading = page.waitForEvent('download');
+  await pdfLink.click();
+  const download = await downloading;
+  expect(download.suggestedFilename()).toMatch(/^001-ST-FG-DPK-.*\.pdf$/);
+  expect(await download.failure()).toBeNull();
 });
 test('staff cannot open administration; data failures show retry state', async ({
   page,
@@ -113,6 +130,8 @@ test('staff cannot open administration; data failures show retry state', async (
   await request.get('http://127.0.0.1:54328/__test/reset?level=staff');
   await login(page);
   await expect(page.getByRole('link', { name: 'Administrasi & Keuangan' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '+ Request Surat' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Ajukan Surat Baru' })).toHaveCount(0);
   await page.goto('/administrasi');
   await expect(page).toHaveURL(/\/dashboard$/);
   await request.get('http://127.0.0.1:54328/__test/reset?level=staff&fail=true');
@@ -123,6 +142,108 @@ test('staff cannot open administration; data failures show retry state', async (
   await request.get('http://127.0.0.1:54328/__test/reset?level=staff');
   await page.getByRole('button', { name: 'Muat ulang data' }).click();
   await expect(page.getByRole('heading', { name: 'Rapat Uji' })).toBeVisible();
+});
+
+test('surat kabid waits for inti approval and kadiv has no creation shortcut', async ({
+  page,
+  request,
+}) => {
+  await request.get('http://127.0.0.1:54328/__test/reset?level=kabid');
+  await login(page);
+  await page.getByRole('button', { name: '+ Request Surat' }).click();
+  await page.getByLabel('Perihal / Pokok Surat').fill('Surat Kabid Uji');
+  await page.getByLabel('Tujuan / Pihak yang Dituju').fill('Sekolah');
+  await page.getByRole('button', { name: 'Kirim Pengajuan' }).click();
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+  await page
+    .getByRole('region', { name: 'Pengajuan Surat Saya' })
+    .getByRole('button', { name: /Surat Kabid Uji/ })
+    .click();
+  await expect(page.getByRole('dialog')).toContainText('Menunggu Persetujuan Inti');
+  await expect(page.getByRole('link', { name: 'Unduh PDF' })).toHaveCount(0);
+  const pendingId = (await page.getByRole('dialog').innerText()).match(/ID: ([a-f0-9-]{36})/)![1];
+  expect((await page.request.get(`/surat/${pendingId}/pdf`)).status()).toBe(409);
+  await expect(page.getByRole('button', { name: /Setujui Surat/ })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Tutup dialog' }).last().click();
+  await request.get('http://127.0.0.1:54328/__test/actor?id=1&level=inti');
+  await page.reload();
+  await page
+    .getByRole('region', { name: 'Pengajuan Surat Saya' })
+    .getByRole('button', { name: /Surat Kabid Uji/ })
+    .click();
+  await page.getByRole('button', { name: /Setujui Surat/ }).click();
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+  await page
+    .getByRole('region', { name: 'Pengajuan Surat Saya' })
+    .getByRole('button', { name: /Surat Kabid Uji/ })
+    .click();
+  await expect(page.getByRole('dialog')).toContainText('Selesai / Disetujui');
+  await expect(page.getByRole('dialog')).toContainText('ACC: Bendahara');
+  await request.get('http://127.0.0.1:54328/__test/actor?id=1&level=kadiv');
+  await page.goto('/dashboard');
+  await expect(page.getByRole('button', { name: '+ Request Surat' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Ajukan Surat Baru' })).toHaveCount(0);
+});
+
+test('surat PDF denies unauthenticated users and guests and handles missing letters', async ({
+  page,
+  request,
+}) => {
+  const path = '/surat/00000000-0000-4000-8000-000000000999/pdf';
+  expect((await page.request.get(path)).status()).toBe(401);
+  await login(page);
+  expect((await page.request.get(path)).status()).toBe(404);
+  expect((await page.request.get('/surat/invalid-id/pdf')).status()).toBe(404);
+  await request.get('http://127.0.0.1:54328/__test/actor?id=1&level=guest');
+  expect((await page.request.get(path)).status()).toBe(403);
+});
+
+test('surat Drive OAuth is admin-only and rejects mismatched or replayed state', async ({
+  page,
+  request,
+  context,
+}) => {
+  await login(page);
+  await page.goto('/administrasi');
+  await expect(page.getByRole('region', { name: 'Pengaturan Google Drive surat' })).toHaveCount(0);
+  await request.get('http://127.0.0.1:54328/__test/actor?id=1&level=admin');
+  await page.reload();
+  await expect(page.getByRole('region', { name: 'Pengaturan Google Drive surat' })).toBeVisible();
+  await page.route('https://accounts.google.com/**', (route) =>
+    route.fulfill({ body: 'Google OAuth fixture', contentType: 'text/html' }),
+  );
+  await page.getByRole('button', { name: 'Hubungkan Google Drive', exact: true }).click();
+  await expect(page).toHaveURL(/^https:\/\/accounts\.google\.com\//);
+  const authorization = new URL(page.url());
+  expect(authorization.searchParams.get('scope')).toBe(
+    'https://www.googleapis.com/auth/drive.file',
+  );
+  expect(authorization.searchParams.get('access_type')).toBe('offline');
+  expect(authorization.searchParams.get('code_challenge_method')).toBe('S256');
+  const oauthCookie = (
+    await context.cookies('http://127.0.0.1:3100/auth/google-drive/callback')
+  ).find((cookie) => cookie.name === 'portal-drive-oauth');
+  expect(oauthCookie?.httpOnly).toBe(true);
+  expect(oauthCookie?.value).not.toContain(authorization.searchParams.get('state'));
+  await page.goto('/auth/google-drive/callback?code=unused&state=wrong');
+  await expect(page).toHaveURL(/\/administrasi\?drive=error$/);
+  await expect(page.getByRole('region', { name: 'Pengaturan Google Drive surat' })).toContainText(
+    'Koneksi Google ditolak atau gagal',
+  );
+  expect((await context.cookies()).some((cookie) => cookie.name === 'portal-drive-oauth')).toBe(
+    false,
+  );
+  await page.goto(
+    `/auth/google-drive/callback?code=unused&state=${authorization.searchParams.get('state')}`,
+  );
+  await expect(page).toHaveURL(/\/administrasi\?drive=error$/);
+  await page.route('**/administrasi**', (route) =>
+    route.request().method() === 'POST' ? route.abort() : route.continue(),
+  );
+  await page.reload();
+  await expect(page.getByRole('region', { name: 'Pengaturan Google Drive surat' })).toContainText(
+    'Pengaturan Drive belum dapat dimuat',
+  );
 });
 
 test('reimburse, cash, broadcast and ticket forms persist through server operations', async ({

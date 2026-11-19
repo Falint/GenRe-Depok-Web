@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { publicContentInput } from '../../features/publik/schema';
 import { MEDIA_LIBRARY } from '../../features/media/content';
 import { accessInput } from '../../features/auth/validation';
+import { suratInput } from '../../features/portal/validation';
 import { roleLevelSchema } from '../../features/portal/schema';
 import type { Profile, RoleLevel } from '../../features/portal/schema';
 
@@ -372,6 +373,112 @@ createServer(async (request, response) => {
       return send(response, 401, { message: 'Unauthorized' });
     if (url.pathname.startsWith('/rest/v1/rpc/')) {
       const name = url.pathname.split('/').at(-1);
+      if (name === 'get_portal_drive_connection') {
+        if (!['inti', 'admin'].includes(level)) return send(response, 403, { code: '42501' });
+        return send(response, 200, null);
+      }
+      if (name === 'create_portal_surat') {
+        if (!['inti', 'admin', 'kabid'].includes(level))
+          return send(response, 403, { code: '42501' });
+        const { request_id, input } = z
+          .object({ request_id: z.uuid(), input: suratInput.omit({ request_id: true }) })
+          .parse(await body(request));
+        const previous = rows.surat.find((r) => r.id === request_id);
+        if (previous) {
+          if (
+            previous.pemohon_id !== userId ||
+            Object.entries(input).some(([key, value]) => previous[key] !== value)
+          )
+            return send(response, 400, { code: '22023' });
+          return send(response, 200, null);
+        }
+        const now = new Date();
+        const parts = new Intl.DateTimeFormat('en', {
+          timeZone: 'Asia/Jakarta',
+          year: 'numeric',
+          month: 'numeric',
+          day: '2-digit',
+        }).formatToParts(now);
+        const part = (key: string) => parts.find((p) => p.type === key)!.value;
+        const month = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'][
+          Number(part('month')) - 1
+        ];
+        const code = {
+          'Surat Tugas': 'ST',
+          'Surat Undangan': 'SU',
+          'Surat Permohonan': 'SPm',
+          'Surat Rekomendasi': 'SR',
+        }[input.jenis];
+        rows.surat.push({
+          ...input,
+          id: request_id,
+          pemohon_id: userId,
+          pemohon_nama: profile().nama_lengkap,
+          divisi: profile().kelompok,
+          nomor_surat: `${String(rows.surat.length + 1).padStart(3, '0')}/${code}/FG-DPK/${month}/${part('year')}`,
+          tanggal: `${part('year')}-${part('month').padStart(2, '0')}-${part('day')}`,
+          created_at: now.toISOString(),
+          updated_at: null,
+          status: level === 'kabid' ? 'Menunggu Persetujuan Inti' : 'Selesai / Disetujui',
+          export_status: 'pending',
+          export_error: null,
+          file_pdf_url: null,
+        });
+        if (level !== 'kabid')
+          rows.surat_approval.push({
+            id: randomUUID(),
+            surat_id: request_id,
+            step_order: 99,
+            step_label: `ACC otomatis: ${profile().jabatan}`,
+            actor_name: profile().nama_lengkap,
+            status: 'Disetujui',
+            acted_at: now.toISOString(),
+            created_at: now.toISOString(),
+          });
+        return send(response, 200, null);
+      }
+      if (name === 'approve_portal_surat') {
+        if (!['inti', 'admin'].includes(level)) return send(response, 403, { code: '42501' });
+        const input = z.object({ target_id: z.uuid() }).parse(await body(request));
+        const row = rows.surat.find((r) => r.id === input.target_id);
+        if (!row) return send(response, 404, {});
+        if (!String(row.status).includes('Selesai')) {
+          row.status = 'Selesai / Disetujui';
+          rows.surat_approval.push({
+            id: randomUUID(),
+            surat_id: row.id,
+            step_order: 99,
+            step_label: `ACC: ${profile().jabatan}`,
+            actor_name: profile().nama_lengkap,
+            status: 'Disetujui',
+            acted_at: new Date().toISOString(),
+            created_at: new Date().toISOString(),
+          });
+        }
+        return send(response, 200, null);
+      }
+      if (name === 'claim_portal_surat_export' || name === 'finish_portal_surat_export') {
+        if (!['inti', 'admin'].includes(level)) return send(response, 403, { code: '42501' });
+        const input = z
+          .object({
+            target_id: z.uuid(),
+            outcome: z.string().optional(),
+            error_value: z.string().optional(),
+          })
+          .passthrough()
+          .parse(await body(request));
+        const row = rows.surat.find((r) => r.id === input.target_id);
+        if (!row || !String(row.status).includes('Selesai')) return send(response, 400, {});
+        if (name === 'claim_portal_surat_export') {
+          if (row.file_pdf_url) return send(response, 200, null);
+          row.export_status = 'uploading';
+          row.export_error = null;
+          return send(response, 200, { claim_id: randomUUID(), file_id: null });
+        }
+        row.export_status = input.outcome;
+        row.export_error = input.error_value || null;
+        return send(response, 200, null);
+      }
       if (name === 'list_portal_accounts') {
         if (level !== 'admin') return send(response, 403, { code: '42501' });
         const input = z
@@ -756,6 +863,7 @@ createServer(async (request, response) => {
     }
     const values = z.record(z.string(), z.unknown()).parse(await body(request));
     if (request.method === 'POST') {
+      if (table === 'surat') return send(response, 403, { code: '42501' });
       const created = {
         id: randomUUID(),
         created_at: new Date().toISOString(),

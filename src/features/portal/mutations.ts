@@ -22,19 +22,4 @@ export async function mutate(
   }
 }
 
-export function checkWrite(error: { code?: string } | null) {
-  if (error) {
-    console.error('[portal:database]', { code: error.code });
-    throw new PortalError(
-      error.code === '40001'
-        ? 'Data berubah. Muat ulang sebelum mencoba lagi.'
-        : error.code === '22023'
-          ? 'Pengajuan tidak cocok atau pos tahun berjalan tidak tersedia. Periksa isian; gunakan form yang sama saat mengulang request gagal.'
-          : error.code === 'PGRST202' || error.code === '42883'
-            ? 'Fitur memerlukan pembaruan database. Hubungi administrator.'
-            : error.code === '42501'
-              ? 'Anda tidak memiliki izin untuk perubahan ini.'
-              : 'Perubahan gagal disimpan. Coba lagi; untuk pengajuan, pertahankan form dan isian yang sama.',
-    );
-  }
-}
+export { checkWrite } from '@/lib/errors';

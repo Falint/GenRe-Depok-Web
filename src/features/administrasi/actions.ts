@@ -1,14 +1,14 @@
 'use server';
 import { mutate, checkWrite } from '@/features/portal/mutations';
 import {
-  canApproveOrConfirm,
+  canCreateSurat,
+  canApproveSurat,
   isPengurusInti,
   requirePermission,
 } from '@/features/auth/permissions';
 import { PortalError } from '@/lib/errors';
 import {
   reimburseDecision,
-  draftNumber,
   mutasiInput,
   parseInput,
   recordId,
@@ -18,30 +18,24 @@ import {
   type ReimburseInput,
   type SuratInput,
 } from '@/features/portal/validation';
+import { exportSurat } from './suratExport';
 
 export async function addSurat(input: SuratInput) {
   return mutate('surat:create', async (client, profile) => {
-    const values = parseInput(suratInput, input);
-    const id = crypto.randomUUID();
-    const { error } = await client
-      .from('surat')
-      .insert({
-        ...values,
-        id,
-        nomor_surat: draftNumber(values.jenis, id),
-        pemohon_id: profile.id,
-        pemohon_nama: profile.nama_lengkap,
-        divisi: profile.kelompok,
-      })
-      .select('id')
-      .single();
+    requirePermission(canCreateSurat(profile.level));
+    const { request_id, ...values } = parseInput(suratInput, input);
+    const { error } = await client.rpc('create_portal_surat', { request_id, input: values });
+    if (error?.code === '22023')
+      throw new PortalError(
+        'Pengajuan surat berubah. Periksa daftar surat sebelum membuka form baru.',
+      );
     checkWrite(error);
   });
 }
 
 export async function approveSurat(input: string) {
   return mutate('surat:approve', async (client, profile) => {
-    requirePermission(canApproveOrConfirm(profile.level));
+    requirePermission(canApproveSurat(profile.level));
     const { error } = await client.rpc('approve_portal_surat', {
       target_id: parseInput(recordId, input),
     });
@@ -50,6 +44,14 @@ export async function approveSurat(input: string) {
         'Approval memerlukan migrasi database transaksi. Hubungi administrator.',
       );
     checkWrite(error);
+  });
+}
+
+export async function retrySuratExport(input: string) {
+  return mutate('surat:export', async (client, profile) => {
+    requirePermission(canApproveSurat(profile.level));
+    const error = await exportSurat(client, parseInput(recordId, input));
+    if (error) throw new PortalError(error);
   });
 }
 

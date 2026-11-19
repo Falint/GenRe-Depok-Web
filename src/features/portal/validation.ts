@@ -22,6 +22,7 @@ export const loginSchema = z
   .strict();
 export const suratInput = z
   .object({
+    request_id: z.uuid(),
     jenis: z.enum(['Surat Tugas', 'Surat Undangan', 'Surat Permohonan', 'Surat Rekomendasi']),
     perihal: title,
     tujuan: shortText,
@@ -102,19 +103,6 @@ export function parseInput<T>(schema: z.ZodType<T>, value: unknown): T {
   const result = schema.safeParse(value);
   if (!result.success) throw new PortalError('Data tidak valid. Periksa isian dan panjang teks.');
   return result.data;
-}
-export function draftNumber(
-  kind: z.infer<typeof suratInput>['jenis'],
-  uniqueId: string,
-  now = new Date(),
-) {
-  const codes = {
-    'Surat Tugas': 'ST',
-    'Surat Undangan': 'SU',
-    'Surat Permohonan': 'SPm',
-    'Surat Rekomendasi': 'SR',
-  };
-  return `DRAFT-${uniqueId}/${codes[kind]}/FG-DPK/${now.getUTCFullYear()}`;
 }
 export type SuratInput = z.infer<typeof suratInput>;
 export type ReimburseInput = z.infer<typeof reimburseInput>;

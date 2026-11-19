@@ -2,13 +2,14 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   canApproveOrConfirm,
+  canCreateSurat,
+  canApproveSurat,
   canRespondToTicket,
   canViewAdminFinance,
   profileToRole,
   requirePermission,
 } from '../features/auth/permissions';
 import {
-  draftNumber,
   mutasiInput,
   parseInput,
   reimburseInput,
@@ -54,6 +55,8 @@ const mutation = (
 
 test('permission matrix uses profile.level for all roles', () => {
   for (const level of ROLE_LEVELS) {
+    assert.equal(canCreateSurat(level), ['admin', 'inti', 'kabid'].includes(level));
+    assert.equal(canApproveSurat(level), ['admin', 'inti'].includes(level));
     assert.equal(canViewAdminFinance(level), ['admin', 'inti'].includes(level));
     assert.equal(canApproveOrConfirm(level), ['admin', 'inti', 'kabid'].includes(level));
     assert.equal(
@@ -116,6 +119,7 @@ test('money rejects zero, negative, fractional, infinite and unsafe amounts', ()
 });
 test('server input rejects forged identity, whitespace and excessive content', () => {
   const input = {
+    request_id: id,
     jenis: 'Surat Tugas',
     perihal: 'Tugas',
     tujuan: 'Sekolah',
@@ -131,10 +135,6 @@ test('server input rejects forged identity, whitespace and excessive content', (
     false,
   );
   assert.throws(() => parseInput(pengumumanInput, {}), PortalError);
-  assert.match(
-    draftNumber('Surat Rekomendasi', id, new Date('2027-01-01T00:00:00Z')),
-    /\/SR\/FG-DPK\/2027$/,
-  );
 });
 test('reimburse accepts optional Drive file links and rejects unsafe or folder URLs', () => {
   const input = {
@@ -249,7 +249,7 @@ test('attendance maps stable user IDs and handles empty roster', () => {
     tanggal: '2026-11-03',
     file_pdf_url: null,
   };
-  assert.equal(mapSurat(letter, []).status, 'Menunggu Review Kabid');
+  assert.equal(mapSurat(letter, []).status, 'Menunggu Persetujuan Inti');
 });
 test('public configuration rejects privileged keys without printing their content', () => {
   const previous = {

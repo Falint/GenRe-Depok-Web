@@ -23,7 +23,11 @@ import {
   BookOpen,
   Wallet,
 } from 'lucide-react';
-import { canViewAdminFinance, canApproveOrConfirm } from '@/features/auth/permissions';
+import {
+  canViewAdminFinance,
+  canApproveOrConfirm,
+  canCreateSurat,
+} from '@/features/auth/permissions';
 
 export default function DashboardTab() {
   const now = useNow();
@@ -175,7 +179,7 @@ export default function DashboardTab() {
                     ? 'Anda memiliki akses penuh Pengurus Inti untuk mengelola kas, verifikasi persuratan, dan disposisi keuangan.'
                     : isLeadership
                       ? 'Anda memiliki wewenang verifikasi bidang dan koordinasi program kerja.'
-                      : 'Portal mandiri staf: Ajukan permohonan surat, klaim reimburse, dan unduh sumber daya resmi.'}
+                      : 'Portal mandiri staf: Ajukan klaim reimburse dan unduh sumber daya resmi.'}
               </p>
             </div>
           </div>
@@ -502,18 +506,20 @@ export default function DashboardTab() {
           <span className="text-xs font-normal text-slate-500">Pengajuan Tanpa Chat WA</span>
         </h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <button
-            onClick={onOpenCreateSurat}
-            className="flex flex-col items-center justify-center p-4 rounded-2xl bg-blue-50/70 hover:bg-blue-100/80 border border-blue-200/60 text-genre-blue transition-all group"
-          >
-            <div className="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center mb-2 group-hover:scale-110 transition-transform text-genre-blue">
-              <FileText className="w-5 h-5" />
-            </div>
-            <span className="font-bold text-xs text-slate-800">+ Request Surat</span>
-            <span className="text-[10px] text-slate-500 text-center">
-              Ajukan draf surat tugas/kegiatan
-            </span>
-          </button>
+          {canCreateSurat(currentRole.level) && (
+            <button
+              onClick={onOpenCreateSurat}
+              className="flex flex-col items-center justify-center p-4 rounded-2xl bg-blue-50/70 hover:bg-blue-100/80 border border-blue-200/60 text-genre-blue transition-all group"
+            >
+              <div className="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center mb-2 group-hover:scale-110 transition-transform text-genre-blue">
+                <FileText className="w-5 h-5" />
+              </div>
+              <span className="font-bold text-xs text-slate-800">+ Request Surat</span>
+              <span className="text-[10px] text-slate-500 text-center">
+                Ajukan surat tugas/kegiatan
+              </span>
+            </button>
+          )}
 
           <button
             onClick={onOpenCreateReimburse}
@@ -582,7 +588,8 @@ export default function DashboardTab() {
         </p>
         {mySurat.length === 0 ? (
           <p className="mt-4 text-sm text-slate-500">
-            Belum ada pengajuan surat. Gunakan tombol + Request Surat.
+            Belum ada pengajuan surat.
+            {canCreateSurat(currentRole.level) && ' Gunakan tombol + Request Surat.'}
           </p>
         ) : (
           <ul className="mt-4 max-h-96 overflow-y-auto divide-y divide-slate-100">

@@ -11,8 +11,10 @@ export default function CreateSuratModal({
   onClose,
   onSubmit,
   busy,
+  currentRole,
 }: CreateModalProps<SuratInput>) {
   const [formData, setFormData] = useState<SuratInput>({
+    request_id: crypto.randomUUID(),
     jenis: 'Surat Tugas',
     perihal: '',
     tujuan: '',
@@ -35,7 +37,7 @@ export default function CreateSuratModal({
   };
 
   return (
-    <Dialog title="Pengajuan draf surat" onClose={onClose} busy={busy}>
+    <Dialog title="Pengajuan surat" onClose={onClose} busy={busy}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 border border-slate-200">
         <div className="flex items-center justify-between px-6 py-4 bg-slate-50 border-b border-slate-200">
           <div className="flex items-center space-x-2">
@@ -43,10 +45,8 @@ export default function CreateSuratModal({
               <FileText className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="font-bold text-slate-900 text-base">Pengajuan Draf Surat Resmi</h3>
-              <p className="text-xs text-slate-500">
-                Draf bernomor unik; nomor resmi ditetapkan sekretariat
-              </p>
+              <h3 className="font-bold text-slate-900 text-base">Pengajuan Surat</h3>
+              <p className="text-xs text-slate-500">Nomor surat otomatis berurutan setiap tahun</p>
             </div>
           </div>
           <button
@@ -148,7 +148,9 @@ export default function CreateSuratModal({
           <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 flex items-start space-x-2 text-amber-800 text-xs">
             <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
             <p>
-              Draf masuk ke antrean tinjauan pimpinan. Alur persetujuan bertingkat belum tersedia.
+              {currentRole.level === 'kabid'
+                ? 'Pengajuan menunggu persetujuan pengurus inti atau admin.'
+                : 'Pengajuan langsung disetujui. Surat dapat dilihat dan diunduh dari portal.'}
             </p>
           </div>
 

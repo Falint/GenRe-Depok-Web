@@ -7,13 +7,14 @@ import logoGenreDepok from '../../public/logo-genre-depok.png';
 import type { Surat } from '@/features/portal/mapping';
 import Dialog from './Dialog';
 import React from 'react';
-import { X, Printer, CheckCircle, QrCode } from 'lucide-react';
+import { X, Download, CheckCircle, QrCode } from 'lucide-react';
 import { KABINET } from '@/features/organisasi/content';
 
 export default function SuratPreviewModal({
   surat,
   onClose,
   onApprove,
+  onRetryExport,
   canApprove,
   roleName,
   busy,
@@ -21,6 +22,7 @@ export default function SuratPreviewModal({
   surat: Surat | null;
   onClose: () => void;
   onApprove: (id: string) => Promise<boolean>;
+  onRetryExport: (id: string) => Promise<boolean>;
   canApprove: boolean;
   roleName: string;
   busy?: boolean;
@@ -46,14 +48,16 @@ export default function SuratPreviewModal({
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              disabled
-              title="Cetak surat resmi belum tersedia"
-              className="px-3 py-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-200 rounded-xl transition-colors text-xs font-bold flex items-center space-x-1"
-            >
-              <Printer className="w-4 h-4" />
-              <span className="hidden sm:inline">Cetak A4</span>
-            </button>
+            {surat.status.includes('Selesai') && (
+              <a
+                href={`/surat/${surat.id}/pdf`}
+                download
+                className="px-3 py-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-200 rounded-xl transition-colors text-xs font-bold flex items-center space-x-1"
+              >
+                <Download className="w-4 h-4" />
+                <span>Unduh PDF</span>
+              </a>
+            )}
             <button
               aria-label="Tutup dialog"
               onClick={onClose}
@@ -102,8 +106,38 @@ export default function SuratPreviewModal({
               </a>
             ) : (
               <p className="mt-3 text-xs text-slate-500">
-                File hasil surat belum tersedia. Pratinjau surat dapat dilihat di bawah.
+                {surat.status.includes('Selesai')
+                  ? 'Surat tersimpan di portal. Gunakan Unduh PDF untuk menyimpan salinan ke perangkat.'
+                  : 'Surat tersimpan di portal. PDF dapat diunduh setelah disetujui.'}
               </p>
+            )}
+            {surat.status.includes('Selesai') && !resultUrl && (
+              <div className="mt-3 space-y-2">
+                <p className="text-xs text-slate-600">
+                  Google Drive opsional; hanya dipakai jika pengurus memilih menyimpan salinan ke
+                  Drive.
+                </p>
+                {surat.export_status === 'failed' && (
+                  <p className="text-xs text-slate-600" role="status">
+                    Penyimpanan Drive sebelumnya belum berhasil. Surat tetap tersedia di portal.
+                  </p>
+                )}
+                {surat.export_status === 'uploading' && (
+                  <p className="text-xs text-slate-600" role="status">
+                    Salinan Drive sedang diproses. Jika terhenti, coba lagi setelah dua menit.
+                  </p>
+                )}
+                {canApprove && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => onRetryExport(surat.id)}
+                    className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-50"
+                  >
+                    Simpan salinan ke Google Drive
+                  </button>
+                )}
+              </div>
             )}
           </section>
           <div className="bg-white shadow-md rounded-2xl p-6 sm:p-10 border border-slate-300 max-w-2xl mx-auto text-slate-800 text-xs sm:text-sm leading-relaxed">

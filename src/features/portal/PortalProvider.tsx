@@ -18,7 +18,8 @@ import Header from '@/components/Header';
 import PortalNavigation from '@/components/PortalNavigation';
 import { logout } from '@/features/auth/actions';
 import {
-  canApproveOrConfirm,
+  canCreateSurat,
+  canApproveSurat,
   canViewAdminFinance,
   profileToRole,
   type CurrentRole,
@@ -44,6 +45,7 @@ import {
   addSurat,
   approveReimburse,
   approveSurat,
+  retrySuratExport,
 } from '@/features/administrasi/actions';
 import { addPengumuman, addTiket, confirmRead, respondTiket } from '@/features/komunikasi/actions';
 
@@ -231,7 +233,9 @@ export default function PortalProvider({
     busy,
     runMutation,
     onNavigateTab,
-    onOpenCreateSurat: (event) => openModal({ type: 'surat' }, event),
+    onOpenCreateSurat: (event) => {
+      if (canCreateSurat(profile.level)) openModal({ type: 'surat' }, event);
+    },
     onOpenCreateReimburse: (event) => openModal({ type: 'reimburse' }, event),
     onOpenCreateTiket: (event) => openModal({ type: 'tiket' }, event),
     onOpenMutasiKas: (event) => openModal({ type: 'kas' }, event),
@@ -335,11 +339,14 @@ export default function PortalProvider({
             </p>
           }
         >
-          {modal?.type === 'surat' && (
+          {modal?.type === 'surat' && canCreateSurat(profile.level) && (
             <CreateSuratModal
               {...createProps}
               onSubmit={(input: SuratInput) =>
-                runMutation(() => addSurat(input), 'Draf surat berhasil diajukan.')
+                runMutation(
+                  () => addSurat(input),
+                  'Surat berhasil diajukan. Lihat pengajuan Anda di portal.',
+                )
               }
             />
           )}
@@ -373,7 +380,13 @@ export default function PortalProvider({
               surat={data.suratList.find((row) => row.id === modal.surat.id) || modal.surat}
               busy={busy}
               onClose={closeModal}
-              canApprove={canApproveOrConfirm(profile.level)}
+              canApprove={canApproveSurat(profile.level)}
+              onRetryExport={(id) =>
+                runMutation(
+                  () => retrySuratExport(id),
+                  'Proses PDF selesai. Lihat hasil pada surat.',
+                )
+              }
               roleName={currentRole.role}
               onApprove={async (id) => {
                 const saved = await runMutation(
@@ -400,15 +413,17 @@ export default function PortalProvider({
             />
           )}
         </Suspense>
-        <div className="md:hidden fixed right-4 bottom-20 z-40">
-          <button
-            aria-label="Ajukan Surat Baru"
-            onClick={(event) => openModal({ type: 'surat' }, event)}
-            className="p-3.5 rounded-full bg-genre-blue text-white shadow-xl"
-          >
-            <Plus className="w-6 h-6" />
-          </button>
-        </div>
+        {canCreateSurat(profile.level) && (
+          <div className="md:hidden fixed right-4 bottom-20 z-40">
+            <button
+              aria-label="Ajukan Surat Baru"
+              onClick={context.onOpenCreateSurat}
+              className="p-3.5 rounded-full bg-genre-blue text-white shadow-xl"
+            >
+              <Plus className="w-6 h-6" />
+            </button>
+          </div>
+        )}
         {toast &&
           createPortal(
             <div

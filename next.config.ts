@@ -7,6 +7,14 @@ if (process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_ANO
 
 const config: NextConfig = {
   poweredByHeader: false,
+  outputFileTracingIncludes: {
+    '/*': [
+      './public/logo-depok.png',
+      './public/logo-dp3ap2kb.png',
+      './public/logo-salam-genre.png',
+      './public/logo-genre-depok.png',
+    ],
+  },
   async headers() {
     return [
       {

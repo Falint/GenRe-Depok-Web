@@ -1,4 +1,5 @@
 'use client';
+import DriveSettings from './DriveSettings';
 import ReimburseDecision from './ReimburseDecision';
 import { REIMBURSE_STATUS } from '@/features/portal/schema';
 import { formatDate } from '@/features/portal/mapping';
@@ -19,7 +20,7 @@ import {
   Lock,
   Wallet,
 } from 'lucide-react';
-import { canViewAdminFinance, canApproveOrConfirm } from '@/features/auth/permissions';
+import { canViewAdminFinance, canApproveOrConfirm, isAdmin } from '@/features/auth/permissions';
 
 export default function AdministrasiTab() {
   const {
@@ -61,20 +62,12 @@ export default function AdministrasiTab() {
             <CheckCircle className="w-4 h-4 mr-1.5 text-genre-blue" /> Wewenang Staf / Anggota:
           </p>
           <ul className="list-disc list-inside space-y-1 text-slate-600 pl-1">
-            <li>Mengajukan permohonan surat tugas atau surat kegiatan (Request Surat).</li>
             <li>Mengajukan klaim reimbursement dana proker divisi (Request Reimburse).</li>
             <li>Melihat serta mengunduh seluruh materi & logo di Media Library.</li>
           </ul>
         </div>
 
         <div className="flex justify-center space-x-3 pt-2">
-          <button
-            onClick={onOpenCreateSurat}
-            className="px-4 py-2 bg-genre-blue text-white font-bold text-xs rounded-xl shadow-md flex items-center space-x-1"
-          >
-            <FileText className="w-4 h-4" />
-            <span>Ajukan Draf Surat</span>
-          </button>
           <button
             onClick={onOpenCreateReimburse}
             className="px-4 py-2 bg-emerald-600 text-white font-bold text-xs rounded-xl shadow-md flex items-center space-x-1"
@@ -113,6 +106,7 @@ export default function AdministrasiTab() {
 
   return (
     <div className="space-y-6 pb-20 md:pb-6">
+      {isAdmin(currentRole.level) && <DriveSettings />}
       {/* Tab Navigation Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
         <div>
@@ -197,7 +191,7 @@ export default function AdministrasiTab() {
               >
                 <option value="semua">Semua Status</option>
                 <option value="pending">Menunggu Review</option>
-                <option value="selesai">Selesai / Terbit</option>
+                <option value="selesai">Disetujui</option>
               </select>
             </div>
 

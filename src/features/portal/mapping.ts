@@ -18,6 +18,7 @@ export function mapSurat(row: Row<'surat'>, approvals: Row<'surat_approval'>[]) 
     ...row,
     status: row.status || SURAT_STATUS.PENDING,
     nomor: row.nomor_surat,
+    tanggal: formatDate(row.tanggal, true),
     pemohon: row.pemohon_nama,
     approvalHistory: approvals
       .filter((item) => item.surat_id === row.id)

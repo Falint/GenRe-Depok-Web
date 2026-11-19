@@ -6,6 +6,8 @@ export const isPortalMember = (level: RoleLevel) => level !== 'guest';
 export const isPengurusInti = (level: RoleLevel) => level === 'inti' || isAdmin(level);
 export const canViewAdminFinance = isPengurusInti;
 export const canApproveOrConfirm = (level: RoleLevel) => isPengurusInti(level) || level === 'kabid';
+export const canCreateSurat = (level: RoleLevel) => isPengurusInti(level) || level === 'kabid';
+export const canApproveSurat = isPengurusInti;
 export const canViewAttendanceList = canApproveOrConfirm;
 export const canRespondToTicket = (
   profile: Pick<Profile, 'level' | 'id'>,

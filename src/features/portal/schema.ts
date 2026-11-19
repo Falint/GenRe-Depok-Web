@@ -38,6 +38,8 @@ export const rowSchemas = {
     status: z.string().nullable(),
     tanggal: z.string(),
     file_pdf_url: z.string().nullable(),
+    export_status: z.enum(['pending', 'uploading', 'ready', 'failed']).optional(),
+    export_error: z.string().nullable().optional(),
   }),
   surat_approval: z.object({
     ...id,
@@ -141,8 +143,8 @@ export const PORTAL_CONFIG = {
   TOAST_DURATION_MS: 3500,
 } as const;
 export const SURAT_STATUS = {
-  PENDING: 'Menunggu Review Kabid',
-  COMPLETE: 'Selesai / Terbit (QR ACC)',
+  PENDING: 'Menunggu Persetujuan Inti',
+  COMPLETE: 'Selesai / Disetujui',
 } as const;
 export const REIMBURSE_STATUS = {
   PENDING: 'Menunggu Approval Bendahara',

@@ -1357,3 +1357,256 @@ test('owner bootstrap and legacy cutover require explicit reviewed accounts and 
   );
   assert.throws(() => sql(reviewed), /belum diturunkan/);
 });
+
+const suratPayload = (jenis = 'Surat Tugas') =>
+  JSON.stringify({
+    jenis,
+    perihal: 'Kegiatan surat',
+    tujuan: 'Sekolah',
+    urgensi: 'Sedang',
+    keterangan: 'Rincian kegiatan',
+  });
+const createLetter = (actor: number, request: number, jenis = 'Surat Tugas') =>
+  asUser(actor, `SELECT public.create_portal_surat('${id(request)}','${suratPayload(jenis)}')`);
+
+test('surat migration preserves history and restricts creation and approval by role', () => {
+  const oldLetters = sql(
+    "SELECT json_agg(json_build_object('id',id,'nomor',nomor_surat,'status',status) ORDER BY id) FROM public.surat",
+  );
+  sql(readFileSync('supabase/migrations/202611190001_surat_workflow.sql', 'utf8'));
+  assert.equal(
+    sql(
+      "SELECT json_agg(json_build_object('id',id,'nomor',nomor_surat,'status',status) ORDER BY id) FROM public.surat",
+    ),
+    oldLetters,
+  );
+  for (const [index, level] of ['inti', 'admin', 'kabid', 'kadiv', 'staff', 'guest'].entries()) {
+    const actor = 970 + index;
+    sql(`INSERT INTO auth.users(id,email,email_confirmed_at) VALUES('${id(actor)}','surat${actor}@gmail.com',now());
+      UPDATE public.profiles SET level='${level}',jabatan='${level}',kelompok='Tim Uji' WHERE id='${id(actor)}'`);
+  }
+  for (const actor of [973, 974, 975]) {
+    assert.throws(() => sql(createLetter(actor, 980)), /Permission denied/);
+  }
+  sql(createLetter(972, 980));
+  assert.equal(
+    sql(`SELECT status FROM public.surat WHERE id='${id(980)}'`),
+    'Menunggu Persetujuan Inti',
+  );
+  assert.match(
+    sql(`SELECT nomor_surat FROM public.surat WHERE id='${id(980)}'`),
+    /^001\/ST\/FG-DPK\/[IVX]+\/\d{4}$/,
+  );
+  assert.equal(sql(`SELECT count(*) FROM public.surat_approval WHERE surat_id='${id(980)}'`), '0');
+  for (const actor of [972, 973, 974, 975]) {
+    assert.throws(
+      () => sql(asUser(actor, `SELECT public.approve_portal_surat('${id(980)}')`)),
+      /Permission denied/,
+    );
+  }
+  for (const actor of [970, 971, 972, 973, 974, 975]) {
+    assert.throws(
+      () =>
+        sql(
+          asUser(
+            actor,
+            `INSERT INTO public.surat(nomor_surat,jenis,perihal,pemohon_nama,divisi,tujuan) VALUES('Fake','Surat Tugas','X','X','X','X')`,
+          ),
+        ),
+      /permission denied/i,
+    );
+  }
+  sql(
+    asUser(
+      970,
+      `SELECT public.approve_portal_surat('${id(980)}'); SELECT public.approve_portal_surat('${id(980)}')`,
+    ),
+  );
+  assert.equal(sql(`SELECT count(*) FROM public.surat_approval WHERE surat_id='${id(980)}'`), '1');
+  assert.equal(
+    sql(`SELECT actor_name FROM public.surat_approval WHERE surat_id='${id(980)}'`),
+    sql(`SELECT nama_lengkap FROM public.profiles WHERE id='${id(970)}'`),
+  );
+  sql(createLetter(970, 981, 'Surat Undangan'));
+  sql(createLetter(971, 982, 'Surat Rekomendasi'));
+  assert.match(sql(`SELECT nomor_surat FROM public.surat WHERE id='${id(981)}'`), /^002\/SU\//);
+  assert.match(sql(`SELECT nomor_surat FROM public.surat WHERE id='${id(982)}'`), /^003\/SR\//);
+  assert.equal(
+    sql(
+      `SELECT count(*) FROM public.surat WHERE id IN ('${id(981)}','${id(982)}') AND status='Selesai / Disetujui'`,
+    ),
+    '2',
+  );
+  assert.equal(
+    sql(
+      `SELECT count(*) FROM public.surat_approval WHERE surat_id IN ('${id(981)}','${id(982)}') AND step_label LIKE 'ACC otomatis:%'`,
+    ),
+    '2',
+  );
+  for (const actor of [970, 971, 972, 973, 974, 975]) {
+    for (const table of ['surat_counters', 'surat_drive_connection', 'surat_exports']) {
+      assert.throws(
+        () => sql(asUser(actor, `SELECT * FROM public.${table}`)),
+        /permission denied/i,
+      );
+    }
+  }
+});
+
+test('surat retry reuses number, rejects changed input and rolls back counters on audit failure', () => {
+  const previous = sql('SELECT sum(terakhir) FROM public.surat_counters');
+  sql(createLetter(970, 981, 'Surat Undangan'));
+  assert.equal(sql('SELECT sum(terakhir) FROM public.surat_counters'), previous);
+  assert.throws(() => sql(createLetter(970, 981)), /Request does not match/);
+  assert.throws(() => sql(createLetter(971, 981, 'Surat Undangan')), /Request does not match/);
+  const forged = JSON.stringify({ ...JSON.parse(suratPayload()), status: 'Selesai / Disetujui' });
+  assert.throws(
+    () => sql(asUser(970, `SELECT public.create_portal_surat('${id(983)}','${forged}')`)),
+    /Invalid input/,
+  );
+  sql(`CREATE FUNCTION public.test_surat_audit_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'Injected surat audit failure'; END; $$;
+    CREATE TRIGGER test_surat_audit_failure BEFORE INSERT ON public.surat_approval FOR EACH ROW EXECUTE FUNCTION public.test_surat_audit_failure();`);
+  try {
+    assert.throws(() => sql(createLetter(970, 983)), /Injected surat audit failure/);
+  } finally {
+    sql(
+      'DROP TRIGGER test_surat_audit_failure ON public.surat_approval; DROP FUNCTION public.test_surat_audit_failure()',
+    );
+  }
+  assert.equal(sql(`SELECT count(*) FROM public.surat WHERE id='${id(983)}'`), '0');
+  assert.equal(sql('SELECT sum(terakhir) FROM public.surat_counters'), previous);
+});
+
+test('concurrent surat creation shares annual sequence and deduplicates repeated requests', async () => {
+  const before = Number(sql('SELECT sum(terakhir) FROM public.surat_counters'));
+  const call = (request: number) =>
+    new Promise<void>((resolve, reject) => {
+      const process = spawn('psql', args, { stdio: ['pipe', 'ignore', 'pipe'] });
+      let error = '';
+      process.stderr.on('data', (data) => {
+        error += String(data);
+      });
+      process.on('error', reject);
+      process.on('close', (code) => (code === 0 ? resolve() : reject(new Error(error))));
+      process.stdin.end(createLetter(972, request));
+    });
+  await Promise.all([call(984), call(984), call(985), call(986)]);
+  assert.equal(Number(sql('SELECT sum(terakhir) FROM public.surat_counters')), before + 3);
+  assert.equal(
+    sql(
+      `SELECT count(DISTINCT nomor_surat) FROM public.surat WHERE id IN ('${id(984)}','${id(985)}','${id(986)}')`,
+    ),
+    '3',
+  );
+});
+
+test('surat annual boundary follows WIB and does not truncate numbers after 999', () => {
+  const original = sql(
+    "SELECT pg_get_functiondef('public.create_portal_surat(uuid,jsonb)'::regprocedure)",
+  );
+  for (const [instant, request, expected] of [
+    ['2099-12-31T16:59:59Z', 987, '001/ST/FG-DPK/XII/2099'],
+    ['2099-12-31T17:00:00Z', 988, '001/ST/FG-DPK/I/2100'],
+  ] as const) {
+    const frozen = original.replaceAll('now()', `'${instant}'::timestamptz`);
+    sql(frozen);
+    sql(createLetter(972, request));
+    assert.equal(sql(`SELECT nomor_surat FROM public.surat WHERE id='${id(request)}'`), expected);
+  }
+  sql('UPDATE public.surat_counters SET terakhir=999 WHERE tahun=2100');
+  sql(createLetter(972, 989));
+  assert.equal(
+    sql(`SELECT nomor_surat FROM public.surat WHERE id='${id(989)}'`),
+    '1000/ST/FG-DPK/I/2100',
+  );
+  sql(original);
+});
+
+test('Drive configuration and export leases enforce permissions, approval and stale retry handling', () => {
+  for (const actor of [970, 972, 973, 974, 975]) {
+    assert.throws(
+      () =>
+        sql(
+          asUser(actor, "SELECT public.save_portal_drive_connection('encrypted-test-token-value')"),
+        ),
+      /Permission denied/,
+    );
+  }
+  for (const actor of [972, 973, 974, 975]) {
+    assert.throws(
+      () => sql(asUser(actor, 'SELECT public.get_portal_drive_connection()')),
+      /Permission denied/,
+    );
+    assert.throws(
+      () => sql(asUser(actor, `SELECT public.claim_portal_surat_export('${id(981)}')`)),
+      /Permission denied/,
+    );
+  }
+  sql(
+    asUser(
+      971,
+      "SELECT public.save_portal_drive_connection('encrypted-test-token-value'); SELECT public.save_portal_drive_connection(NULL,'folder_123','Surat')",
+    ),
+  );
+  assert.equal(
+    JSON.parse(sql(asUser(970, 'SELECT public.get_portal_drive_connection()')).split('\n').at(-1)!)
+      .folder_id,
+    'folder_123',
+  );
+  assert.throws(
+    () => sql(asUser(970, `SELECT public.claim_portal_surat_export('${id(984)}')`)),
+    /Letter not approved/,
+  );
+  const claim = JSON.parse(
+    sql(asUser(970, `SELECT public.claim_portal_surat_export('${id(981)}')`))
+      .split('\n')
+      .at(-1)!,
+  );
+  assert.throws(
+    () => sql(asUser(971, `SELECT public.claim_portal_surat_export('${id(981)}')`)),
+    /Export in progress/,
+  );
+  const finish = (token: string, outcome: string, file = 'drive_file_123') =>
+    asUser(
+      970,
+      `SELECT public.finish_portal_surat_export('${id(981)}','${token}','${file}','${outcome}')`,
+    );
+  sql(finish(claim.claim_id, 'uploading'));
+  sql(finish(claim.claim_id, 'failed'));
+  assert.equal(sql(`SELECT status FROM public.surat WHERE id='${id(981)}'`), 'Selesai / Disetujui');
+  const retry = JSON.parse(
+    sql(asUser(971, `SELECT public.claim_portal_surat_export('${id(981)}')`))
+      .split('\n')
+      .at(-1)!,
+  );
+  assert.equal(retry.file_id, 'drive_file_123');
+  assert.throws(() => sql(finish(claim.claim_id, 'ready')), /Stale export/);
+  assert.throws(() => sql(finish(retry.claim_id, 'ready', 'another_id')), /Invalid export/);
+  sql(finish(retry.claim_id, 'ready'));
+  sql(finish(retry.claim_id, 'failed'));
+  assert.equal(sql(`SELECT export_status FROM public.surat WHERE id='${id(981)}'`), 'ready');
+  assert.equal(
+    sql(`SELECT file_pdf_url FROM public.surat WHERE id='${id(981)}'`),
+    'https://drive.google.com/file/d/drive_file_123/view',
+  );
+  assert.equal(
+    sql(asUser(970, `SELECT public.claim_portal_surat_export('${id(981)}') IS NULL`))
+      .split('\n')
+      .at(-1),
+    't',
+  );
+  const expired = JSON.parse(
+    sql(asUser(970, `SELECT public.claim_portal_surat_export('${id(982)}')`))
+      .split('\n')
+      .at(-1)!,
+  );
+  sql(
+    `UPDATE public.surat_exports SET expires_at=now()-interval '1 second' WHERE surat_id='${id(982)}'`,
+  );
+  const recovered = JSON.parse(
+    sql(asUser(970, `SELECT public.claim_portal_surat_export('${id(982)}')`))
+      .split('\n')
+      .at(-1)!,
+  );
+  assert.notEqual(expired.claim_id, recovered.claim_id);
+});

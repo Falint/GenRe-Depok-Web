@@ -78,6 +78,36 @@ export type Database = {
     };
     Views: { [_ in never]: never };
     Functions: {
+      create_portal_surat: {
+        Args: { request_id: string; input: Record<string, unknown> };
+        Returns: undefined;
+      };
+      get_portal_drive_connection: {
+        Args: Record<string, never>;
+        Returns: {
+          encrypted_token: string;
+          folder_id: string | null;
+          folder_name: string | null;
+        } | null;
+      };
+      save_portal_drive_connection: {
+        Args: { token_value: string | null; folder_value?: string; name_value?: string };
+        Returns: undefined;
+      };
+      claim_portal_surat_export: {
+        Args: { target_id: string };
+        Returns: { claim_id: string; file_id: string | null } | null;
+      };
+      finish_portal_surat_export: {
+        Args: {
+          target_id: string;
+          claim_value: string;
+          file_value: string | null;
+          outcome: string;
+          error_value?: string;
+        };
+        Returns: undefined;
+      };
       portal_signup_ready: { Args: Record<string, never>; Returns: boolean };
       list_portal_accounts: {
         Args: { search_text: string; page_number: number };
