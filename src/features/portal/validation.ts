@@ -32,9 +32,21 @@ export const suratInput = z
     waktu_kegiatan: z.string().trim().max(INPUT_LIMITS.SHORT_TEXT),
     tempat_kegiatan: z.string().trim().max(INPUT_LIMITS.SHORT_TEXT),
     sistem_pelaksanaan: z.string().trim().max(INPUT_LIMITS.SHORT_TEXT),
+    lampiran_agenda_id: z.uuid().nullable().default(null),
+    lampiran_peserta_ids: z.array(z.uuid()).default([]),
   })
   .strict()
   .superRefine((value, context) => {
+    if (
+      (value.lampiran_agenda_id !== null) !== value.lampiran_peserta_ids.length > 0 ||
+      new Set(value.lampiran_peserta_ids).size !== value.lampiran_peserta_ids.length
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['lampiran_peserta_ids'],
+        message: 'Pilih kegiatan dan peserta lampiran.',
+      });
+    }
     if (value.jenis === 'Surat Tugas' || value.jenis === 'Surat Undangan') {
       for (const field of ['tanggal_kegiatan', 'waktu_kegiatan', 'tempat_kegiatan'] as const) {
         if (!value[field])

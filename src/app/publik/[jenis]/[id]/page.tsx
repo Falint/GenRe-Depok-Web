@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getPublicContent } from '@/features/publik/data';
 import { formatDate } from '@/features/portal/mapping';
+import RegistrationForm from '@/features/publik/RegistrationForm';
 
 export default async function Page({ params }: { params: Promise<{ jenis: string; id: string }> }) {
   const { jenis, id } = await params;
@@ -37,6 +38,7 @@ export default async function Page({ params }: { params: Promise<{ jenis: string
       <div className="whitespace-pre-wrap break-words border-t border-slate-200 pt-6 text-base leading-8">
         {item.isi}
       </div>
+      {jenis === 'agenda' && <RegistrationForm agenda={item} />}
     </article>
   );
 }

@@ -60,6 +60,7 @@ const letter: Row<'surat'> = {
   status: 'Selesai / Disetujui',
   created_at: null,
   file_pdf_url: null,
+  lampiran_peserta: [],
 };
 
 test('Drive secrets are authenticated ciphertext and reject invalid keys or tampering', () => {
@@ -85,6 +86,30 @@ test('surat PDF renders A4 with multiple pages for long activity details', async
   assert.match(contents, /\/MediaBox \[0 0 595\.\d+ 841\.\d+\]/);
   const pageCount = Number(contents.match(/\/Type \/Pages\s*\/Count (\d+)/)?.[1]);
   assert.ok(pageCount > 1, `Expected multiple pages, got ${pageCount}`);
+});
+
+test('attachment PDF prints one berkas, every participant and repeated table headers on each appendix page', async () => {
+  const pdf = await renderSuratPdf({
+    ...letter,
+    lampiran_judul: 'Kegiatan Remaja',
+    lampiran_peserta: Array.from({ length: 90 }, (_, index) => ({
+      nama: `Peserta${String(index).padStart(3, '0')}`,
+      instansi: 'SMA Negeri 1 Depok',
+      unsur: 'PIK-R',
+    })),
+  });
+  const pages = execFileSync('pdftotext', ['-layout', '-', '-'], { input: pdf, encoding: 'utf8' })
+    .split('\f')
+    .filter((page) => page.trim());
+  assert.ok(pages.length >= 3);
+  assert.match(pages[0], /1 \(satu\) berkas/);
+  for (const page of pages.slice(1)) {
+    assert.match(page, /Lampiran/);
+    assert.match(page, /No\.\s+Nama\s+Instansi\s+Unsur/);
+  }
+  const text = pages.join(' ');
+  for (let index = 0; index < 90; index++)
+    assert.equal(text.split(`Peserta${String(index).padStart(3, '0')}`).length - 1, 1);
 });
 
 test('surat template keeps legacy content and only embeds signatures after approval', async () => {

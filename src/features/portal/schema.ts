@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { attachmentParticipantSchema } from '@/features/publik/registrationSchema';
 
 export const ROLE_LEVELS = ['guest', 'admin', 'inti', 'kabid', 'kadiv', 'staff'] as const;
 export const roleLevelSchema = z.enum(ROLE_LEVELS);
@@ -38,6 +39,10 @@ export const rowSchemas = {
     waktu_kegiatan: z.string().nullable().optional(),
     tempat_kegiatan: z.string().nullable().optional(),
     sistem_pelaksanaan: z.string().nullable().optional(),
+    lampiran_agenda_id: z.uuid().nullable().optional(),
+    lampiran_judul: z.string().nullable().optional(),
+    lampiran_peserta_ids: z.array(z.uuid()).optional(),
+    lampiran_peserta: z.array(attachmentParticipantSchema).default([]),
     urgensi: z.enum(['Rendah', 'Sedang', 'Tinggi']).nullable(),
     status: z.string().nullable(),
     tanggal: z.string(),

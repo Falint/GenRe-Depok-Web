@@ -6,7 +6,7 @@ import { publicContentSchema, type ContentKind } from './schema';
 
 export const PAGE_SIZE = 12;
 const columns =
-  'id,jenis,judul,ringkasan,isi,status,mulai_at,selesai_at,lokasi,published_at,updated_at,version';
+  'id,jenis,judul,ringkasan,isi,status,mulai_at,selesai_at,lokasi,pendaftaran_dibuka,published_at,updated_at,version';
 
 export async function listPublicContent(kind: ContentKind, page: number, past = false) {
   const client = await createClient();

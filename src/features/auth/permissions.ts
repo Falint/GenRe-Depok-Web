@@ -24,6 +24,9 @@ export function requirePermission(allowed: boolean) {
   if (!allowed) throw new PortalError('Anda tidak memiliki izin untuk tindakan ini.');
 }
 
+export const canViewParticipants = (profile: Pick<Profile, 'level' | 'bidang_id'>) =>
+  canCreateSurat(profile.level) || canManageContent(profile);
+
 export function profileToRole(profile: Profile) {
   return {
     userId: profile.id,

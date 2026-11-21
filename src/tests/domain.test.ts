@@ -263,6 +263,7 @@ test('attendance maps stable user IDs and handles empty roster', () => {
     pemohon_nama: 'Pengurus',
     divisi: 'Inti',
     nomor_surat: 'DRAFT',
+    lampiran_peserta: [],
     jenis: 'Surat Tugas',
     perihal: 'Kegiatan',
     tujuan: 'Sekolah',

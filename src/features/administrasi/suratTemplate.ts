@@ -1,6 +1,8 @@
 import type { Row } from '@/features/portal/schema';
 import { SURAT_STATUS } from '@/features/portal/schema';
 
+export const SURAT_ATTACHMENT_LABEL = '1 (satu) berkas';
+
 export const SURAT_OPENING =
   'Bersama ini disampaikan bahwa kami, Forum Generasi Berencana (GenRe) Kota Depok yang berada dibawah naungan Dinas Pemberdayaan Perempuan, Perlindungan Anak, Pengendalian Penduduk dan Keluarga Berencana (DP3AP2KB) Kota Depok memiliki program yang mengedepankan penguatan karakter, kesehatan reproduksi dan pencegahan perilaku berisiko serta meningkatkan ketahanan keluarga khususnya ketahanan remaja di Kota Depok.';
 export const SURAT_PARAGRAPH_EXAMPLE =

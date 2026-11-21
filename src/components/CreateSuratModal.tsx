@@ -6,6 +6,7 @@ import { suratInput } from '@/features/portal/validation';
 import React, { useState } from 'react';
 import { X, Send, FileText, AlertCircle } from 'lucide-react';
 import { SURAT_OPENING, SURAT_PARAGRAPH_EXAMPLE } from '@/features/administrasi/suratTemplate';
+import { ParticipantPicker } from '@/features/publik/Participants';
 
 export default function CreateSuratModal({
   isOpen,
@@ -25,6 +26,8 @@ export default function CreateSuratModal({
     waktu_kegiatan: '',
     tempat_kegiatan: '',
     sistem_pelaksanaan: '',
+    lampiran_agenda_id: null,
+    lampiran_peserta_ids: [],
   });
   const scheduleRequired = formData.jenis === 'Surat Tugas' || formData.jenis === 'Surat Undangan';
 
@@ -34,7 +37,9 @@ export default function CreateSuratModal({
     e.preventDefault();
     const parsed = suratInput.safeParse(formData);
     if (!parsed.success) {
-      alert('Lengkapi paragraf pengantar dan rincian kegiatan sesuai jenis surat.');
+      alert(
+        'Lengkapi paragraf pengantar, rincian kegiatan, dan pilihan peserta jika memakai lampiran.',
+      );
       return;
     }
 
@@ -199,6 +204,14 @@ export default function CreateSuratModal({
             Tanggal, waktu, dan tempat wajib untuk Surat Tugas dan Surat Undangan. Sistem
             pelaksanaan opsional.
           </p>
+
+          <ParticipantPicker
+            agendaId={formData.lampiran_agenda_id}
+            selectedIds={formData.lampiran_peserta_ids}
+            onChange={(agendaId, ids) =>
+              setFormData({ ...formData, lampiran_agenda_id: agendaId, lampiran_peserta_ids: ids })
+            }
+          />
 
           <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 flex items-start space-x-2 text-amber-800 text-xs">
             <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />

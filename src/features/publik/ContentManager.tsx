@@ -8,11 +8,13 @@ import { formatDate } from '@/features/portal/mapping';
 import { PortalError } from '@/lib/errors';
 import { savePublicContent } from './actions';
 import type { ContentKind, PublicContent } from './schema';
+import Participants from './Participants';
 
 export default function ContentManager({ items }: { items: PublicContent[] }) {
   const router = useRouter();
   const [editing, setEditing] = useState<PublicContent | 'new' | null>(null);
   const [message, setMessage] = useState('');
+  const [participants, setParticipants] = useState<PublicContent | null>(null);
   return (
     <section className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -65,6 +67,16 @@ export default function ContentManager({ items }: { items: PublicContent[] }) {
               </p>
             </div>
             <div className="flex gap-4 text-sm font-semibold">
+              {item.jenis === 'agenda' && (
+                <button
+                  type="button"
+                  onClick={() => setParticipants(item)}
+                  className="text-genre-blue underline"
+                  aria-label={`Peserta ${item.judul}`}
+                >
+                  Peserta
+                </button>
+              )}
               {item.status === 'published' && (
                 <Link
                   className="text-genre-blue underline"
@@ -97,6 +109,21 @@ export default function ContentManager({ items }: { items: PublicContent[] }) {
             router.refresh();
           }}
         />
+      )}
+      {participants && (
+        <Dialog title={`Peserta ${participants.judul}`} onClose={() => setParticipants(null)}>
+          <div className="w-full max-w-3xl rounded-2xl bg-white p-5 sm:p-8">
+            <h2 className="mb-4 text-xl font-bold">Peserta {participants.judul}</h2>
+            <Participants agendaId={participants.id} />
+            <button
+              type="button"
+              onClick={() => setParticipants(null)}
+              className="mt-4 rounded-lg border border-slate-300 px-4 py-2 font-bold"
+            >
+              Tutup
+            </button>
+          </div>
+        </Dialog>
       )}
     </section>
   );
@@ -135,6 +162,7 @@ function ContentEditor({
         mulai_at: kind === 'agenda' && value('mulai_at') ? fromWib(value('mulai_at')) : null,
         selesai_at: kind === 'agenda' && value('selesai_at') ? fromWib(value('selesai_at')) : null,
         lokasi: kind === 'agenda' ? value('lokasi') : '',
+        pendaftaran_dibuka: kind === 'agenda' && form.get('pendaftaran_dibuka') === 'on',
       });
       if (!result.ok) setError(result.error);
       else onSaved();
@@ -219,6 +247,19 @@ function ContentEditor({
                 Lokasi
                 <input name="lokasi" defaultValue={item?.lokasi} maxLength={500} required />
               </label>
+              <label>
+                <input
+                  type="checkbox"
+                  name="pendaftaran_dibuka"
+                  defaultChecked={item?.pendaftaran_dibuka}
+                  className="!mr-2 !inline !w-auto"
+                />
+                Buka pendaftaran kegiatan
+              </label>
+              <p className="text-sm text-slate-600">
+                Pendaftaran gratis tanpa akun. Otomatis ditutup saat kegiatan dimulai atau publikasi
+                ditarik.
+              </p>
             </div>
           )}
           {error && (

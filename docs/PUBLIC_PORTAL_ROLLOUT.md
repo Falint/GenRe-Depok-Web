@@ -10,6 +10,26 @@
 - `/konten-publik` hanya untuk inti dan bidang Branding. Berita/agenda memakai teks biasa tanpa HTML. Publikasi langsung berlaku; penarikan mengubah status ke draft. Publikasi ulang menggunakan waktu publikasi baru.
 - Publik membaca perubahan saat membuka ulang halaman. Tidak ada subscription Realtime publik.
 
+## Pendaftaran kegiatan dan lampiran surat
+
+- Pengelola konten existing (inti, admin, dan pengurus Branding) dapat memilih **Buka pendaftaran kegiatan** pada editor agenda. Default agenda lama/baru tertutup. Form hanya tersedia pada agenda published yang pendaftarannya dibuka dan waktu mulai belum lewat. Penarikan publikasi, penutupan manual, atau waktu mulai kegiatan menutup pendaftaran; server/RPC memeriksa ulang walau form pengunjung masih terbuka.
+- Pendaftaran gratis tanpa akun. Nama lengkap, instansi, dan unsur wajib teks bebas, maksimal 300 karakter per isian. Catatan penulisan memberi contoh kapitalisasi sesuai EYD dan singkatan resmi; aplikasi mempertahankan kapitalisasi pengguna dan merapikan spasi.
+- Kombinasi nama, instansi, dan unsur yang sama pada kegiatan sama ditolak, tanpa membedakan kapitalisasi atau spasi berlebih. Orang berbeda dengan ketiga isian identik perlu menghubungi pengurus. Tidak ada verifikasi identitas, email/WA, kuota, pembayaran, CAPTCHA, atau check-in. Kode bukti bukan verifikasi identitas; risiko spam tetap ada.
+- Bukti berisi kode acak, kegiatan, dan data yang didaftarkan. Peserta dapat menyalin atau mencetaknya. Bukti tidak dikirim lewat email dan tidak tersedia pencarian/pemulihan publik. Simpan bukti sebelum meninggalkan halaman.
+- Request ID tetap selama form terbuka; retry dengan payload sama mengembalikan kode sebelumnya, termasuk jika kegiatan sudah ditutup. Retry berbeda payload ditolak. Bila koneksi terputus, pertahankan form/isian dan kirim ulang; reload dapat menghilangkan akses ke bukti yang belum sempat diterima.
+- Pengelola membuka tombol **Peserta** pada agenda di Konten Publik. Inti, admin, seluruh kabid, dan pengurus Branding dapat membaca daftar peserta; pengurus lain dan guest tidak dapat membaca daftar. `anon` tidak memiliki SELECT atau direct write; `authenticated` hanya mendapat SELECT kolom pendataan melalui RLS, tanpa kolom kode bukti. Keduanya hanya bisa mendaftar melalui RPC tervalidasi.
+- Surat baru dapat memilih agenda dan mencentang peserta, mencari peserta, atau memilih semua. Server mengambil data sumber berdasarkan ID dan membekukannya dalam transaksi pengajuan surat. Lampiran yang sudah masuk surat mengikuti izin baca surat existing. Tidak ada perubahan lampiran setelah pengajuan. Lihat [panduan surat](SURAT_ROLLOUT.md).
+
+### Penerapan tambahan
+
+1. Cadangkan target yang sudah dikonfirmasi. Pastikan migration sebelumnya hingga `202611130001_guest_accounts.sql`, `202611190001_surat_workflow.sql`, dan `202611190002_surat_template.sql` sudah diterapkan. Jangan menjalankan baseline ulang.
+2. Hentikan sementara perubahan agenda dan pengajuan surat. Operator menerapkan `supabase/migrations/202611200001_event_registration_attachments.sql` satu kali melalui prosedur database existing, lalu deploy aplikasi yang sesuai. Agent tidak menerapkan SQL live atau melakukan deploy otomatis.
+3. Migration menambah flag agenda, tabel/RLS/RPC pendaftaran, kolom snapshot surat, dan memperbarui kedua RPC pengelolaan agenda/pengajuan surat. Tidak mengubah nomor/status/riwayat surat atau membuka agenda otomatis. Payload lama tanpa field baru masih diterima. Daftar peserta memakai paging internal agar tidak berhenti pada batas default Supabase.
+4. Uji satu agenda sebagai pengelola: buka pendaftaran, daftar dari browser tanpa sesi, simpan bukti, periksa penolakan duplikat, lalu tutup pendaftaran. Uji akses inti/admin/kabid/Branding serta penolakan guest/staff bidang lain.
+5. Ajukan surat dengan sebagian peserta, periksa preview dan PDF sesudah ACC: `1 (satu) berkas`, tabel hitam-putih, dan peserta sesuai pilihan. Periksa surat lama tetap utuh. Salinan Drive memakai PDF sama, tetapi akses Drive nyata perlu pengujian operator tersendiri.
+
+Rollback aplikasi tidak menghapus pendaftaran atau lampiran. Sebelum rollback, tutup semua pendaftaran dengan kode baru dan hentikan pengajuan surat. Pertahankan migration/data; versi lama tidak menampilkan snapshot lampiran, jadi nonaktifkan unduhan/export surat selama rollback agar tidak menghasilkan dokumen tanpa lampiran. Pulihkan versi kompatibel sebelum membuka fitur kembali.
+
 ## Penerapan database
 
 Migration disiapkan di repository, tidak diterapkan otomatis oleh aplikasi atau agent.

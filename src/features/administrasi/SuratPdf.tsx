@@ -14,6 +14,7 @@ import {
 import type { Row } from '@/features/portal/schema';
 import { formatDate } from '@/features/portal/mapping';
 import {
+  SURAT_ATTACHMENT_LABEL,
   SURAT_OPENING,
   SURAT_SCHEDULE_INTRO,
   SURAT_SIGNATORIES,
@@ -51,6 +52,13 @@ const styles = StyleSheet.create({
   colon: { width: 10 },
   value: { flex: 1 },
   signature: { marginTop: 10 },
+  tableRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderLeftWidth: 1,
+    borderColor: '#000000',
+  },
+  cell: { padding: 5, borderRightWidth: 1, borderColor: '#000000' },
 });
 
 export async function renderSuratPdf(surat: Row<'surat'>) {
@@ -80,7 +88,7 @@ export async function renderSuratPdf(surat: Row<'surat'>) {
           <View style={{ flex: 1 }}>
             {[
               ['Nomor', surat.nomor_surat],
-              ['Lampiran', '-'],
+              ['Lampiran', surat.lampiran_peserta?.length ? SURAT_ATTACHMENT_LABEL : '-'],
               ['Perihal', surat.perihal],
             ].map(([label, value]) => (
               <View key={label} style={styles.row}>
@@ -137,6 +145,37 @@ export async function renderSuratPdf(surat: Row<'surat'>) {
           </View>
         )}
       </Page>
+      {Boolean(surat.lampiran_peserta?.length) && (
+        <Page size="A4" style={styles.page}>
+          <View fixed>
+            <Text style={styles.bold}>Lampiran {surat.nomor_surat}</Text>
+            <Text style={[styles.bold, { marginTop: 6, marginBottom: 10 }]}>
+              Daftar Peserta {surat.lampiran_judul}
+            </Text>
+            <View style={[styles.tableRow, { borderTopWidth: 1 }]}>
+              {['No.', 'Nama', 'Instansi', 'Unsur'].map((label, index) => (
+                <Text
+                  key={label}
+                  style={[styles.cell, styles.bold, { width: index === 0 ? '10%' : '30%' }]}
+                >
+                  {label}
+                </Text>
+              ))}
+            </View>
+          </View>
+          {surat.lampiran_peserta.map((participant, index) => (
+            <View key={index} style={styles.tableRow} wrap={false}>
+              {[String(index + 1), participant.nama, participant.instansi, participant.unsur].map(
+                (value, column) => (
+                  <Text key={column} style={[styles.cell, { width: column === 0 ? '10%' : '30%' }]}>
+                    {value}
+                  </Text>
+                ),
+              )}
+            </View>
+          ))}
+        </Page>
+      )}
     </Document>,
   );
 }

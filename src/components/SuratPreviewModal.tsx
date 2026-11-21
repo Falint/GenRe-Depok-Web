@@ -7,6 +7,7 @@ import React from 'react';
 import { X, Download, CheckCircle } from 'lucide-react';
 
 import {
+  SURAT_ATTACHMENT_LABEL,
   SURAT_OPENING,
   SURAT_SCHEDULE_INTRO,
   SURAT_SIGNATORIES,
@@ -191,7 +192,7 @@ export default function SuratPreviewModal({
                 <tbody>
                   {[
                     ['Nomor', surat.nomor],
-                    ['Lampiran', '-'],
+                    ['Lampiran', surat.lampiran_peserta?.length ? SURAT_ATTACHMENT_LABEL : '-'],
                     ['Perihal', surat.perihal],
                   ].map(([label, value]) => (
                     <tr key={label}>
@@ -263,6 +264,48 @@ export default function SuratPreviewModal({
               </section>
             )}
           </article>
+          {Boolean(surat.lampiran_peserta?.length) && (
+            <article
+              aria-label="Lampiran peserta surat"
+              className="mx-auto mt-6 max-w-2xl break-words border border-slate-300 bg-white p-5 text-xs leading-relaxed text-black shadow-md sm:p-10 sm:text-sm"
+              style={{ fontFamily: '"Times New Roman", Times, serif' }}
+            >
+              <h4 className="font-bold">Lampiran {surat.nomor}</h4>
+              <p className="mb-4 mt-2 font-bold">Daftar Peserta {surat.lampiran_judul}</p>
+              <table className="w-full table-fixed border-collapse border border-black text-left">
+                <caption className="sr-only">Daftar peserta lampiran surat</caption>
+                <thead>
+                  <tr>
+                    {['No.', 'Nama', 'Instansi', 'Unsur'].map((label, index) => (
+                      <th
+                        key={label}
+                        scope="col"
+                        className={`border border-black p-2 ${index === 0 ? 'w-[10%]' : 'w-[30%]'}`}
+                      >
+                        {label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {surat.lampiran_peserta.map((item, index) => (
+                    <tr key={index}>
+                      {[String(index + 1), item.nama, item.instansi, item.unsur].map(
+                        (value, column) => (
+                          <td
+                            key={column}
+                            className="break-words border border-black p-2 align-top"
+                          >
+                            {value}
+                          </td>
+                        ),
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </article>
+          )}
         </div>
 
         {/* Modal Footer & ACC Action */}

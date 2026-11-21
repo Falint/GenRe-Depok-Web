@@ -1746,3 +1746,181 @@ test('surat template RPC still allocates one number per concurrent request', asy
     '2',
   );
 });
+
+test('event registration migration preserves history, closes existing agendas and enforces anonymous boundaries', async () => {
+  const before = sql(
+    'SELECT json_agg(json_build_array(id,nomor_surat,status) ORDER BY id) FROM public.surat',
+  );
+  sql(readFileSync('supabase/migrations/202611200001_event_registration_attachments.sql', 'utf8'));
+  assert.equal(
+    sql('SELECT json_agg(json_build_array(id,nomor_surat,status) ORDER BY id) FROM public.surat'),
+    before,
+  );
+  assert.equal(sql('SELECT count(*) FROM public.public_content WHERE pendaftaran_dibuka'), '0');
+  const save = (target: number, version: number, patch: Record<string, unknown> = {}) =>
+    asUser(
+      970,
+      `SELECT public.save_portal_public_content('${id(target)}',${version},'${JSON.stringify({ jenis: 'agenda', judul: 'Kegiatan Remaja', ringkasan: 'Ringkasan', isi: 'Kegiatan', status: 'published', mulai_at: '2099-01-01T02:00:00Z', selesai_at: null, lokasi: 'Depok', pendaftaran_dibuka: true, ...patch })}')`,
+    );
+  sql(save(1200, -1));
+  sql(save(1201, -1, { status: 'draft' }));
+  sql(save(1202, -1, { mulai_at: '2020-01-01T02:00:00Z' }));
+  sql(save(1203, -1, { pendaftaran_dibuka: false }));
+  const payload = { nama: 'Andi Pratama', instansi: 'SMA Negeri 1 Depok', unsur: 'PIK-R' };
+  const register = (request: number, event = 1200, input = payload) =>
+    `SET ROLE anon; SELECT public.register_portal_event('${id(request)}','${id(event)}','${JSON.stringify(input)}')`;
+  const receipt = sql(register(1210)).split('\n').at(-1);
+  assert.match(receipt!, /^[a-f0-9-]{36}$/);
+  assert.equal(sql(register(1210)).split('\n').at(-1), receipt);
+  const publicParticipantId = sql(
+    `SELECT id FROM public.event_registrations WHERE request_key='${id(1210)}'`,
+  );
+  assert.notEqual(publicParticipantId, id(1210));
+  assert.throws(
+    () =>
+      sql(
+        `SET ROLE anon; SELECT public.register_portal_event('${publicParticipantId}','${id(1200)}','${JSON.stringify(payload)}')`,
+      ),
+    /duplicate key/,
+  );
+  assert.throws(
+    () => sql(register(1210, 1200, { ...payload, nama: 'Diganti' })),
+    /Request does not match/,
+  );
+  assert.throws(
+    () => sql(register(1211, 1200, { ...payload, nama: ' andi   pratama ' })),
+    /duplicate key/,
+  );
+  for (const event of [1201, 1202, 1203, 1299])
+    assert.throws(() => sql(register(1211, event)), /Registration closed/);
+  for (const patch of [
+    { nama: '' },
+    { unsur: ' ' },
+    { instansi: 'x'.repeat(301) },
+    { pemohon_id: id(970) },
+  ])
+    assert.throws(() => sql(register(1211, 1200, { ...payload, ...patch })), /Invalid input/);
+  assert.throws(
+    () => sql('SET ROLE anon; SELECT nama FROM public.event_registrations'),
+    /permission denied/,
+  );
+  assert.throws(
+    () =>
+      sql(
+        `SET ROLE anon; INSERT INTO public.event_registrations(id,agenda_id,nama,instansi,unsur) VALUES('${id(1212)}','${id(1200)}','A','B','C')`,
+      ),
+    /permission denied/,
+  );
+  sql(
+    `UPDATE public.profiles SET bidang_id='internal', divisi_id=NULL WHERE id IN ('${id(973)}','${id(974)}')`,
+  );
+  for (const actor of [970, 971, 972])
+    assert.equal(
+      sql(asUser(actor, 'SELECT count(id) FROM public.event_registrations')).split('\n').at(-1),
+      '1',
+    );
+  for (const actor of [973, 974, 975])
+    assert.equal(
+      sql(asUser(actor, 'SELECT count(id) FROM public.event_registrations')).split('\n').at(-1),
+      '0',
+    );
+  sql(`UPDATE public.profiles SET bidang_id='branding' WHERE id='${id(974)}'`);
+  assert.equal(
+    sql(asUser(974, 'SELECT count(id) FROM public.event_registrations')).split('\n').at(-1),
+    '1',
+  );
+  assert.equal(
+    sql(asUser(975, 'SELECT count(id) FROM public.event_registrations')).split('\n').at(-1),
+    '0',
+  );
+  assert.throws(
+    () => sql(asUser(970, 'SELECT kode FROM public.event_registrations')),
+    /permission denied/,
+  );
+  assert.throws(
+    () => sql(asUser(970, 'SELECT request_key FROM public.event_registrations')),
+    /permission denied/,
+  );
+  for (const role of ['anon', 'authenticated']) {
+    assert.equal(
+      sql(
+        `SELECT has_table_privilege('${role}','public.event_registrations','INSERT') OR has_table_privilege('${role}','public.event_registrations','UPDATE') OR has_table_privilege('${role}','public.event_registrations','DELETE') OR has_table_privilege('${role}','public.event_registrations','TRUNCATE')`,
+      ),
+      'f',
+    );
+  }
+  const results = await Promise.all([
+    concurrentSql(register(1213, 1200, { ...payload, nama: 'Concurrent' })),
+    concurrentSql(register(1214, 1200, { ...payload, nama: 'Concurrent' })),
+  ]);
+  assert.equal(results.filter(Boolean).length, 1);
+  assert.deepEqual(
+    await Promise.all([
+      concurrentSql(register(1215, 1200, { ...payload, nama: 'Retry' })),
+      concurrentSql(register(1215, 1200, { ...payload, nama: 'Retry' })),
+    ]),
+    [true, true],
+  );
+  sql(save(1200, 0, { pendaftaran_dibuka: false }));
+  assert.equal(sql(register(1210)).split('\n').at(-1), receipt);
+  assert.throws(() => sql(register(1216)), /Registration closed/);
+  assert.throws(
+    () =>
+      sql(
+        save(1200, 1, { jenis: 'berita', mulai_at: null, lokasi: '', pendaftaran_dibuka: false }),
+      ),
+    /cannot become news/,
+  );
+});
+
+test('letter attachments validate participant references, freeze data and preserve idempotent numbering', () => {
+  const participantId = (request: number) =>
+    sql(`SELECT id FROM public.event_registrations WHERE request_key='${id(request)}'`);
+  const payload = {
+    ...JSON.parse(suratPayload('Surat Permohonan')),
+    tanggal_kegiatan: '',
+    waktu_kegiatan: '',
+    tempat_kegiatan: '',
+    sistem_pelaksanaan: '',
+    lampiran_agenda_id: id(1200),
+    lampiran_peserta_ids: [participantId(1215), participantId(1210)],
+  };
+  const call = (request: number, input = payload) =>
+    asUser(972, `SELECT public.create_portal_surat('${id(request)}','${JSON.stringify(input)}')`);
+  const before = Number(sql('SELECT sum(terakhir) FROM public.surat_counters'));
+  sql(call(1220));
+  const snapshot = sql(`SELECT lampiran_peserta FROM public.surat WHERE id='${id(1220)}'`);
+  assert.deepEqual(
+    JSON.parse(snapshot).map((row: { nama: string }) => row.nama),
+    ['Andi Pratama', 'Retry'],
+  );
+  sql(
+    call(1220, { ...payload, lampiran_peserta_ids: [...payload.lampiran_peserta_ids].reverse() }),
+  );
+  assert.equal(Number(sql('SELECT sum(terakhir) FROM public.surat_counters')), before + 1);
+  for (const patch of [
+    { lampiran_peserta_ids: [participantId(1210), participantId(1210)] },
+    { lampiran_peserta_ids: [id(1299)] },
+    { lampiran_agenda_id: null },
+    { lampiran_peserta_ids: [] },
+    { lampiran_agenda_id: id(1201) },
+    { lampiran_peserta: [{ nama: 'Forged' }] },
+  ])
+    assert.throws(() => sql(call(1221, { ...payload, ...patch })), /Invalid/);
+  assert.throws(
+    () => sql(call(1220, { ...payload, lampiran_peserta_ids: [participantId(1210)] })),
+    /Request does not match/,
+  );
+  sql(
+    `UPDATE public.event_registrations SET nama='Changed later' WHERE request_key='${id(1210)}'; UPDATE public.public_content SET judul='Changed later' WHERE id='${id(1200)}'`,
+  );
+  sql(asUser(970, `SELECT public.approve_portal_surat('${id(1220)}')`));
+  assert.equal(sql(`SELECT lampiran_peserta FROM public.surat WHERE id='${id(1220)}'`), snapshot);
+  assert.equal(
+    sql(`SELECT lampiran_judul FROM public.surat WHERE id='${id(1220)}'`),
+    'Kegiatan Remaja',
+  );
+  sql(call(1220));
+  sql(call(1222, { ...payload, lampiran_agenda_id: null, lampiran_peserta_ids: [] }));
+  assert.equal(sql(`SELECT lampiran_peserta FROM public.surat WHERE id='${id(1222)}'`), '[]');
+});

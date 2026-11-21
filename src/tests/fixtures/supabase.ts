@@ -6,6 +6,7 @@ import { publicContentInput } from '../../features/publik/schema';
 import { MEDIA_LIBRARY } from '../../features/media/content';
 import { accessInput } from '../../features/auth/validation';
 import { suratInput } from '../../features/portal/validation';
+import { registrationInput, registrationOpen } from '../../features/publik/registrationSchema';
 import { roleLevelSchema } from '../../features/portal/schema';
 import type { Profile, RoleLevel } from '../../features/portal/schema';
 
@@ -145,6 +146,7 @@ function reset() {
       'media_resources',
       'content_history',
       'public_content',
+      'event_registrations',
     ].map((table) => [table, []]),
   );
   rows.pagu_anggaran = [
@@ -263,6 +265,7 @@ createServer(async (request, response) => {
         published_at: new Date(Date.UTC(2026, 0, index + 1)).toISOString(),
         updated_at: '2026-01-01T00:00:00Z',
         version: 0,
+        pendaftaran_dibuka: false,
       }));
       rows.public_content.push({
         ...rows.public_content[0],
@@ -276,6 +279,7 @@ createServer(async (request, response) => {
         id: fixtureId(360),
         jenis: 'agenda',
         judul: 'Agenda mendatang',
+        pendaftaran_dibuka: true,
         mulai_at: '2099-01-01T02:00:00Z',
         selesai_at: null,
         lokasi: 'Depok',
@@ -369,10 +373,56 @@ createServer(async (request, response) => {
     }
     if (url.pathname === '/auth/v1/logout') return send(response, 200, {});
     const authenticated = !!request.headers.authorization?.startsWith('Bearer eyJ');
-    if (!authenticated && !(url.pathname === '/rest/v1/public_content' && request.method === 'GET'))
+    if (
+      !authenticated &&
+      !(url.pathname === '/rest/v1/public_content' && request.method === 'GET') &&
+      url.pathname !== '/rest/v1/rpc/register_portal_event'
+    )
       return send(response, 401, { message: 'Unauthorized' });
     if (url.pathname.startsWith('/rest/v1/rpc/')) {
       const name = url.pathname.split('/').at(-1);
+      if (name === 'register_portal_event') {
+        const payload = z
+          .object({ request_id: z.uuid(), event_id: z.uuid(), input: registrationInput })
+          .strict()
+          .parse(await body(request));
+        const previous = rows.event_registrations.find(
+          (row) => row.request_key === payload.request_id,
+        );
+        if (previous) {
+          if (
+            previous.agenda_id !== payload.event_id ||
+            Object.entries(payload.input).some(([key, value]) => previous[key] !== value)
+          )
+            return send(response, 400, { code: '22023' });
+          return send(response, 200, previous.kode);
+        }
+        const event = rows.public_content.find((row) => row.id === payload.event_id);
+        if (!event || !registrationOpen(event as Parameters<typeof registrationOpen>[0]))
+          return send(response, 400, { code: 'P0001' });
+        if (
+          rows.event_registrations.some(
+            (row) =>
+              row.agenda_id === payload.event_id &&
+              ['nama', 'instansi', 'unsur'].every(
+                (key) =>
+                  String(row[key]).toLowerCase() ===
+                  String(payload.input[key as keyof typeof payload.input]).toLowerCase(),
+              ),
+          )
+        )
+          return send(response, 409, { code: '23505' });
+        const created = {
+          id: randomUUID(),
+          request_key: payload.request_id,
+          agenda_id: payload.event_id,
+          ...payload.input,
+          kode: randomUUID(),
+          created_at: new Date().toISOString(),
+        };
+        rows.event_registrations.push(created);
+        return send(response, 200, created.kode);
+      }
       if (name === 'get_portal_drive_connection') {
         if (!['inti', 'admin'].includes(level)) return send(response, 403, { code: '42501' });
         return send(response, 200, null);
@@ -392,12 +442,24 @@ createServer(async (request, response) => {
         if (previous) {
           if (
             previous.pemohon_id !== userId ||
-            Object.entries(input).some(([key, value]) => previous[key] !== value)
+            Object.entries(input).some(
+              ([key, value]) => JSON.stringify(previous[key]) !== JSON.stringify(value),
+            )
           )
             return send(response, 400, { code: '22023' });
           return send(response, 200, null);
         }
         const now = new Date();
+        const participants = rows.event_registrations.filter(
+          (row) =>
+            row.agenda_id === input.lampiran_agenda_id &&
+            input.lampiran_peserta_ids.includes(String(row.id)),
+        );
+        if (participants.length !== input.lampiran_peserta_ids.length)
+          return send(response, 400, { code: '22023' });
+        const attachmentEvent = rows.public_content.find(
+          (row) => row.id === input.lampiran_agenda_id,
+        );
         const parts = new Intl.DateTimeFormat('en', {
           timeZone: 'Asia/Jakarta',
           year: 'numeric',
@@ -416,6 +478,12 @@ createServer(async (request, response) => {
         }[input.jenis];
         rows.surat.push({
           ...input,
+          lampiran_judul: attachmentEvent?.judul || null,
+          lampiran_peserta: participants.map(({ nama, instansi, unsur }) => ({
+            nama,
+            instansi,
+            unsur,
+          })),
           id: request_id,
           pemohon_id: userId,
           pemohon_nama: profile().nama_lengkap,
@@ -528,7 +596,7 @@ createServer(async (request, response) => {
       const v = z.record(z.string(), z.unknown()).parse(await body(request));
       const input = z.record(z.string(), z.unknown()).parse(v.input || {});
       const now = new Date().toISOString();
-      const contentManager = level === 'inti' || field === 'branding';
+      const contentManager = ['inti', 'admin'].includes(level) || field === 'branding';
       if (name === 'save_portal_public_content') {
         if (!contentManager) return send(response, 403, { code: '42501' });
         const parsed = publicContentInput.safeParse(input);
@@ -826,6 +894,11 @@ createServer(async (request, response) => {
           return 0;
         });
       }
+      if (
+        table === 'event_registrations' &&
+        (level === 'guest' || (!['inti', 'admin', 'kabid'].includes(level) && field !== 'branding'))
+      )
+        results = [];
       if (table === 'reimburse' && level !== 'inti')
         results = results.filter((r) => r.pemohon_id === userId);
       if (table === 'reimburse_approval' && level !== 'inti')

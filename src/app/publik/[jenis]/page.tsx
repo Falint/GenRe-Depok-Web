@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { listPublicContent, PAGE_SIZE } from '@/features/publik/data';
 import { contentPage } from '@/features/publik/schema';
 import { formatDate } from '@/features/portal/mapping';
+import { registrationOpen } from '@/features/publik/registrationSchema';
 
 export async function generateMetadata({ params }: { params: Promise<{ jenis: string }> }) {
   return { title: (await params).jenis === 'berita' ? 'Berita' : 'Agenda' };
@@ -73,6 +74,11 @@ export default async function Page({
               </Link>
             </h2>
             {item.lokasi && <p className="mt-2 break-words text-sm font-semibold">{item.lokasi}</p>}
+            {jenis === 'agenda' && (
+              <p className="mt-2 text-sm font-bold text-slate-700">
+                {registrationOpen(item) ? 'Pendaftaran dibuka · Gratis' : 'Pendaftaran ditutup'}
+              </p>
+            )}
             <p className="mt-3 break-words text-sm leading-7 text-slate-600">{item.ringkasan}</p>
             <Link
               href={`/publik/${jenis}/${item.id}`}

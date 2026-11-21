@@ -7,6 +7,7 @@ import type {
 } from '@/features/panitia/schema';
 import type { mediaSchema, contentHistorySchema } from '@/features/media/schema';
 import type { publicContentSchema } from '@/features/publik/schema';
+import type { participantSchema } from '@/features/publik/registrationSchema';
 import type { Row } from '@/features/portal/schema';
 
 // Schema contract derived from supabase_setup.sql and supabase/migrations, not generated against the live database.
@@ -19,6 +20,10 @@ type Table<T, Required extends keyof T> = {
 export type Database = {
   public: {
     Tables: {
+      event_registrations: Table<
+        z.infer<typeof participantSchema> & { kode: string; request_key: string },
+        'request_key' | 'agenda_id' | 'nama' | 'instansi' | 'unsur'
+      >;
       account_access_history: Table<
         {
           id: string;
@@ -78,6 +83,10 @@ export type Database = {
     };
     Views: { [_ in never]: never };
     Functions: {
+      register_portal_event: {
+        Args: { request_id: string; event_id: string; input: Record<string, unknown> };
+        Returns: string;
+      };
       create_portal_surat: {
         Args: { request_id: string; input: Record<string, unknown> };
         Returns: undefined;

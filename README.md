@@ -90,6 +90,8 @@ Migration koordinasi `202611070001_coordination.sql` dan katalog `202611070002_m
 
 Untuk portal publik, migration `202611100001_public_content.sql` menambahkan tabel terpisah, RLS pembaca publik, dan RPC pengelolaan khusus inti/Branding. Pemilik telah mengonfirmasi pengujian fitur berhasil setelah implementasi. Agent tidak menerapkan migration atau memverifikasi ulang Supabase live; konfirmasi pemilik tidak menggantikan audit database. Ikuti [panduan portal publik](docs/PUBLIC_PORTAL_ROLLOUT.md) untuk pemasangan baru dan rollback.
 
+Pendaftaran kegiatan publik tanpa login dan lampiran peserta pada surat baru memerlukan migration `202611200001_event_registration_attachments.sql`. Pengelola membuka pendaftaran melalui editor agenda; peserta mengisi nama, instansi, dan unsur teks bebas, lalu menyimpan kode bukti. Pembuat surat memilih peserta untuk lampiran tabel hitam-putih yang dibekukan saat pengajuan. Petunjuk aktivasi dan batas pendaftaran tersedia pada panduan portal publik di atas.
+
 Pengumuman dan media baru dikelola inti serta pengurus Bidang Branding. Penugasan panitia berada di tab **Kebutuhan Panitia** dalam Komunikasi dan terpisah dari absensi. Dasbor menyediakan kalender WIB; deadline tiket lama tetap berupa teks sampai tanggal kalender ditetapkan. Tanggal penambahan aset katalog lama tidak ditebak. Palet, PRIMERA, dan empat template tetap tersedia saat layanan katalog mengalami gangguan.
 
 Snapshot 8 November 2026 menemukan bahwa `anon` dan `authenticated` tidak memiliki izin write profil, termasuk perubahan role sendiri. Pemeriksaan metadata ini bukan sertifikasi seluruh keamanan atau bukti perilaku runtime. Temuan dan tindak lanjut lainnya dicatat pada AGENTS.md.

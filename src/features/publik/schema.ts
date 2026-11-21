@@ -9,6 +9,7 @@ const fields = {
   mulai_at: z.iso.datetime({ offset: true }).nullable(),
   selesai_at: z.iso.datetime({ offset: true }).nullable(),
   lokasi: z.string().trim().max(500),
+  pendaftaran_dibuka: z.boolean().default(false),
 };
 
 export const publicContentInput = z
@@ -19,6 +20,8 @@ export const publicContentInput = z
       ctx.addIssue({ code: 'custom', message: 'Agenda wajib memiliki waktu mulai dan lokasi.' });
     if (value.jenis === 'berita' && (value.mulai_at || value.selesai_at || value.lokasi))
       ctx.addIssue({ code: 'custom', message: 'Waktu dan lokasi hanya untuk agenda.' });
+    if (value.jenis !== 'agenda' && value.pendaftaran_dibuka)
+      ctx.addIssue({ code: 'custom', message: 'Pendaftaran hanya untuk agenda.' });
     if (
       value.selesai_at &&
       value.mulai_at &&
